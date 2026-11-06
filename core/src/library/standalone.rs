@@ -61,6 +61,10 @@ pub fn folders(app: Emulator) -> (&'static [&'static str], Option<Config>) {
         Emulator::DsVita => (&["ux0:/data/dsvita"], None),
         Emulator::Flycast => (&[], Some(Config::FlycastCfg("ux0:/data/flycast/emu.cfg"))),
         Emulator::PcsxAwo => (&["ux0:/data/pcsx-awo/roms"], Some(Config::PcsxFolders("ux0:/data/pcsx-awo/rom_folders.txt"))),
+        // The folders it lists with no setting: `roms/` in its data folder and
+        // the shared `ux0:roms` (`k_builtin_roots`); more come from its
+        // `vita.ini` and are listed by their own folder categories.
+        Emulator::RetroAdhoc => (&["ux0:/data/RetroAdhoc/roms", "ux0:/roms"], None),
         _ => (&[], None),
     }
 }
@@ -235,6 +239,7 @@ mod tests {
     fn folders_come_from_each_emulators_own_files() {
         assert_eq!(folders(Emulator::DsVita).0, ["ux0:/data/dsvita"]);
         assert_eq!(folders(Emulator::NooDs), (&[][..], None));
+        assert_eq!(folders(Emulator::RetroAdhoc), (&["ux0:/data/RetroAdhoc/roms", "ux0:/roms"][..], None));
         let daedalus = Config::DaedalusPath("path.ini");
         let mut bytes = b"ux0:/n64/".to_vec();
         bytes.resize(256, 0);

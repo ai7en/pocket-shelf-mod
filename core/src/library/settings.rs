@@ -225,6 +225,7 @@ keyed!(
         Flycast = "flycast",
         ScummVm = "scummvm",
         PcsxAwo = "pcsxawo",
+        RetroAdhoc = "retroadhoc",
     }
 );
 
@@ -262,6 +263,22 @@ pub const STANDALONE: &[(Emulator, &str, &[&str])] = &[
     // (`standalone::pcsx_uri`), and opens some formats only
     // (`standalone::accepts`).
     (Emulator::PcsxAwo, "PCSXR0001", &["Sony - PlayStation"]),
+    // Retro Adhoc (ai7en/vitadhoc-mod): gpSP and TGB Dual with Genesis Plus
+    // GX, FCEUmm and Snes9x 2005. It reads `&param=` as DaedalusX64 does, a
+    // path without a device as a file under its `roms/` folder
+    // (`rom_from_launch`, `gpsp/vita/main_vita.c`).
+    (
+        Emulator::RetroAdhoc,
+        "RADH00001",
+        &[
+            "Nintendo - Game Boy Advance",
+            "Nintendo - Game Boy",
+            "Nintendo - Game Boy Color",
+            "Sega - Mega Drive - Genesis",
+            "Nintendo - Nintendo Entertainment System",
+            "Nintendo - Super Nintendo Entertainment System",
+        ],
+    ),
 ];
 
 impl Emulator {
@@ -280,6 +297,7 @@ impl Emulator {
             Emulator::Flycast => "Flycast",
             Emulator::ScummVm => "ScummVM",
             Emulator::PcsxAwo => "PCSX AwO",
+            Emulator::RetroAdhoc => "Retro Adhoc",
         }
     }
 
@@ -617,7 +635,15 @@ mod tests {
         use crate::library::catalog::Emulators;
         let nds: Vec<Emulator> = Emulator::standalone_for("Nintendo - Nintendo DS").collect();
         assert_eq!(nds, [Emulator::DsVita, Emulator::NooDs]);
-        assert_eq!(Emulator::standalone_for("Nintendo - Super Nintendo Entertainment System").count(), 0);
+        assert_eq!(Emulator::standalone_for("Atari - 2600").count(), 0);
+        // Retro Adhoc opens the six consoles of gpSP, TGB Dual and the
+        // libretro cores it carries; NooDS shares the GBA with it.
+        let snes: Vec<Emulator> = Emulator::standalone_for("Nintendo - Super Nintendo Entertainment System").collect();
+        assert_eq!(snes, [Emulator::RetroAdhoc]);
+        let gba: Vec<Emulator> = Emulator::standalone_for("Nintendo - Game Boy Advance").collect();
+        assert_eq!(gba, [Emulator::NooDs, Emulator::RetroAdhoc]);
+        assert_eq!(Emulator::RetroAdhoc.title_id(), Some("RADH00001"));
+        assert_eq!(Emulator::from_key("retroadhoc"), Some(Emulator::RetroAdhoc));
         assert_eq!(Emulator::DaedalusX64.title_id(), Some("DEDALOX64"));
         assert_eq!((Emulator::RetroArch.bit(), Emulator::DaedalusX64.bit(), Emulator::Flycast.bit()), (0, 1, 8));
         // A DS game both DS emulators open: DSVita first, the user may

@@ -1269,6 +1269,7 @@ fn standalone_name(app: shelf_core::host::Emulator) -> Option<&'static core::ffi
         Emulator::Flycast => Some(c"FLYCASTDC"),
         Emulator::ScummVm => Some(c"VSCU00001"),
         Emulator::PcsxAwo => Some(c"PCSXR0001"),
+        Emulator::RetroAdhoc => Some(c"RADH00001"),
         _ => None,
     }
 }

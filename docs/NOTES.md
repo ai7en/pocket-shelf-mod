@@ -525,6 +525,19 @@ stick at each launch when it differs.
   their games in the console tabs. **On hardware** (2026-11-06, 0.6.0-beta.1):
   a Dreamcast game from a folder category started in Flycast. Not yet run:
   the other launches, and the emulators' own folders.
+
+- **Retro Adhoc** (2026-11-06; title id `RADH00001`, ai7en/vitadhoc-mod): gpSP,
+  TGB Dual, Genesis Plus GX, FCEUmm and Snes9x 2005 in one app. A standalone
+  emulator in `settings::STANDALONE` for the GBA, Game Boy, Game Boy Color,
+  Mega Drive, NES and SNES databases. Its launch reads `&param=` last and takes
+  the rest as the path, undecoded (`rom_from_launch` and `plat_launch_param`,
+  `gpsp/vita/main_vita.c`, `plat_vita.c`); a path without a device is a file
+  under its `roms/` folder, and the console comes from the extension. Its game
+  folders are `ux0:/data/RetroAdhoc/roms` and the shared `ux0:/roms`
+  (`standalone::folders`). Games a RetroArch playlist lists keep RetroArch as
+  the default; SELECT ▸ the editor's Open with offers Retro Adhoc. **Not yet
+  run on hardware**; the Rust change was not compiled where it was written
+  (no crates.io access), so run `make test` first.
 - **ScummVM** (`VSCU00001`, 2026-11-06): its games are `scummvm.ini`'s
   sections other than `scummvm`, `keymapper` and `cloud` that have a
   `gameid` and `path` (`standalone::scummvm_games`); listed with their
