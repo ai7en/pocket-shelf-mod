@@ -3,7 +3,7 @@
  * screen (SceShell, the `*main` section of the tai config).
  *
  * It does two things, each switched on in Pocket Shelf (SELECT > System > Console
- * start), which writes `ux0:data/PocketShelf/autostart.txt`:
+ * start), which writes `ux0:data/RetroShelf/autostart.txt`:
  *   boot=1    open Pocket Shelf once at console start;
  *   return=1  open Pocket Shelf again when a game it started closes.
  *
@@ -16,7 +16,7 @@
  * later (a first launch can stop at the title's LiveArea page).
  *
  * Return after a game: before Pocket Shelf starts a title it writes
- * `ux0:data/PocketShelf/return.txt` and then ends. The plugin looks for the
+ * `ux0:data/RetroShelf/return.txt` and then ends. The plugin looks for the
  * file every POLL_US. Once another application runs, it waits for every
  * application to close (system ones, NPXS..., do not count), then deletes
  * the file and starts Pocket Shelf. It deletes the file without starting
@@ -25,7 +25,7 @@
  * A game started from the home screen writes no file, so closing it changes
  * nothing; closing Pocket Shelf itself changes nothing either.
  *
- * Each step goes to `ux0:data/PocketShelf/boot-plugin.log`, started again at
+ * Each step goes to `ux0:data/RetroShelf/boot-plugin.log`, started again at
  * each console start and capped at LOG_MAX bytes.
  *
  * Holding L while the console starts makes taiHEN skip every plugin; the
@@ -42,8 +42,8 @@
 #include <psp2/kernel/threadmgr.h>
 #include <stdarg.h>
 
-#define SELF "POCKTSHLF"
-#define DATA "ux0:data/PocketShelf"
+#define SELF "RETROSHLF"
+#define DATA "ux0:data/RetroShelf"
 #define SETTINGS DATA "/autostart.txt"
 #define MARKER DATA "/return.txt"
 #define LOG DATA "/boot-plugin.log"

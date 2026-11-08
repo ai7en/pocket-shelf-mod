@@ -357,9 +357,9 @@ mod tests {
         assert!(!saved(&mut host).boot);
 
         shelf.console_start_input(&mut host, None, true, false);
-        assert_eq!(host.changes.last(), Some(&Change::AutoBoot("POCKTSHLF".into())));
+        assert_eq!(host.changes.last(), Some(&Change::AutoBoot("RETROSHLF".into())));
         assert_eq!(saved(&mut host).autoboot_before, "PCSB00245");
-        shelf.autostart_event(&mut host, setup(true, Some("POCKTSHLF")));
+        shelf.autostart_event(&mut host, setup(true, Some("RETROSHLF")));
         shelf.console_start_input(&mut host, None, true, false);
         assert_eq!(host.changes.last(), Some(&Change::AutoBoot("PCSB00245".into())));
         assert_eq!(saved(&mut host).autoboot_before, "");

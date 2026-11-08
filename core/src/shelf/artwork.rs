@@ -346,7 +346,7 @@ impl Shelf {
                 drawer.row(gfx, t.enter_key, None, None, true, Step::Right);
                 drawer.space(8.0);
                 drawer.text(gfx, t.key_help);
-                drawer.text(gfx, "ux0:data/PocketShelf/steamgriddb.txt");
+                drawer.text(gfx, "ux0:data/RetroShelf/steamgriddb.txt");
                 if !flow.status.is_empty() {
                     drawer.note(gfx, &flow.status, 1);
                 }

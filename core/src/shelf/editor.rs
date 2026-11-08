@@ -761,7 +761,7 @@ impl Shelf {
         if !note.is_empty() {
             drawer.note(gfx, &note, 1);
         } else if count == 0 {
-            let folder = if backdrop { "ux0:data/PocketShelf/backdrops" } else { "ux0:data/PocketShelf/art" };
+            let folder = if backdrop { "ux0:data/RetroShelf/backdrops" } else { "ux0:data/RetroShelf/art" };
             drawer.note(gfx, &format!("{} {folder}", t.no_png), 1);
         }
         drawer.hints(gfx, &hints);

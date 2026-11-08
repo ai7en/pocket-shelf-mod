@@ -333,7 +333,7 @@ impl App {
         let mut y = ((H - height) / 2.0).round();
         self.draw_mark(gfx, (W - 220.0) / 2.0, y);
         y += 96.0 + 20.0 + 4.0 + 20.0;
-        gfx.text_top_centered(Role::Heading, W / 2.0, y, theme.text, "Pocket Shelf");
+        gfx.text_top_centered(Role::Heading, W / 2.0, y, theme.text, "Retro Shelf");
         y += lines[0] + 20.0;
         let t = crate::i18n::messages(self.language);
         gfx.text_top_centered(Role::Body, W / 2.0, y, theme.dim, t.scan_title);

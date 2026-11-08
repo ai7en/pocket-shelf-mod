@@ -486,7 +486,7 @@ fn run(id: i32, url: &str, auth: &str, dest: Option<&str>, kind: Kind, cancel: &
     }
     if let (Kind::Wikidata, Some(path)) = (kind, saving) {
         let body = with_slot(id, |slot| core::mem::take(&mut slot.body)).unwrap_or_default();
-        // `path` is in the data folder (`ux0:data/PocketShelf/wikidata/…`).
+        // `path` is in the data folder (`ux0:data/RetroShelf/wikidata/…`).
         let file = path.rsplit('/').next().unwrap_or("");
         if !shelf_core::online::wikidata::download_reads(file, &String::from_utf8_lossy(&body)) {
             return Err(String::from("not a game details table"));

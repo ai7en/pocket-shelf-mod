@@ -40,7 +40,7 @@ pub const AUTOBOOT_CFG: &str = "ux0:data/AutoBoot/boot.cfg";
 /// is the one in use.
 pub const TAI_CONFIGS: [&str; 2] = ["ux0:tai/config.txt", "ur0:tai/config.txt"];
 
-pub const SELF_ID: &str = "POCKTSHLF";
+pub const SELF_ID: &str = "RETROSHLF";
 
 #[derive(Clone, Default, PartialEq, Eq, Debug)]
 pub struct AutoStart {

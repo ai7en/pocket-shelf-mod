@@ -1608,7 +1608,7 @@ impl Shelf {
             }
             Item::Keyboard => {
                 let own = s.keyboard == crate::library::settings::KeyboardKind::Own;
-                (t.keyboard_kind, Some(if own { "Pocket Shelf" } else { t.keyboard_system }.into()), None, Both)
+                (t.keyboard_kind, Some(if own { "Retro Shelf" } else { t.keyboard_system }.into()), None, Both)
             }
             Item::Theme => {
                 let th = &t.themes;

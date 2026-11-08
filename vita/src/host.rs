@@ -12,7 +12,7 @@ use shelf_core::host::{DecodeAs, Event, Host, NetId, NetKind, NetState, Picture,
 use crate::platform::{backdrop, installed};
 
 /// The data folder, the same one Pocket Shelf 0.1 used.
-pub const DATA: &str = "ux0:data/PocketShelf";
+pub const DATA: &str = "ux0:data/RetroShelf";
 
 /// Whether this build may write `path` in the data folder: the files in
 /// `shelf_core::host::SAVED_FILES` and a title's changes, `titles/<id>.json`.

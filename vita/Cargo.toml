@@ -3,7 +3,7 @@ name = "pocket-shelf"
 # The app's version: APP_VER, the LiveArea text, the release tag's check,
 # and the update check (vita/build.rs) read it.
 version = "0.6.1"
-authors = ["fthdgn"]
+authors = ["ai7en"]
 edition = "2021"
 publish = false
 
@@ -29,10 +29,10 @@ default = ["data-fs"]
 data-fs = []
 
 [package.metadata.vita]
-# The app's own title id since the cutover (docs/PLAN.md, phase 6): a
-# release replaces ux0:app/POCKTSHLF, and the updater app starts it.
-title_id = "POCKTSHLF"
-title_name = "Pocket Shelf"
+# Retro Shelf's own title id, so it installs next to Pocket Shelf's POCKTSHLF:
+# a build replaces ux0:app/RETROSHLF only, and the update check stays off.
+title_id = "RETROSHLF"
+title_name = "Retro Shelf"
 
 # vita-elf-create reads sceUserMainThreadStackSize from the symbol table.
 [package.metadata.vita.profile.release]
