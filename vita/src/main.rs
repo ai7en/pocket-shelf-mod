@@ -3,6 +3,7 @@
 
 mod backend;
 mod host;
+mod memory;
 mod platform;
 mod status;
 
@@ -14,6 +15,9 @@ use vita2d_sys::*;
 use vitasdk_sys::*;
 
 use host::{now_us, VitaHost};
+
+#[global_allocator]
+static ALLOCATOR: memory::Counting = memory::Counting;
 
 #[no_mangle]
 #[used]
@@ -101,10 +105,7 @@ fn main() {
         }
 
         let mut trace = Trace::default();
-        // The GPU finishes the previous frame before textures change.
-        unsafe { vita2d_wait_rendering_done() };
-        let mut at = now_us();
-        let wait = (at - start) as u32;
+        let mut at = start;
         let work_start = at;
         let mut lap = || {
             let now = now_us();
@@ -112,7 +113,6 @@ fn main() {
             at = now;
             spent
         };
-        trace.wait = wait;
 
         trace.event_count = app.events(&mut host, &mut gfx) as u32;
         trace.events = lap();
@@ -136,12 +136,20 @@ fn main() {
 
         app.draw(&mut gfx);
         trace.commands = gfx.cmds.len() as u32;
+        trace.calls = shelf_core::gfx::batches(&gfx.cmds).count() as u32;
         trace.glyphs = gfx.work.glyphs;
         trace.textures_added = gfx.work.textures_added;
         if gfx.work.atlas_reset {
             host.log(&format!("glyph atlas started over ({} times)", gfx.atlas_resets()));
         }
         trace.draw = lap();
+
+        // The GPU renders the previous frame while the CPU works on this one
+        // (on hardware it took 15-17 ms, and the two added up to 26 ms). It
+        // has finished before textures change and before
+        // `vita2d_start_drawing` empties the vertex pool it reads.
+        unsafe { vita2d_wait_rendering_done() };
+        trace.wait = lap();
 
         let uploads = unsafe { backend.sync(&mut gfx.textures) };
         trace.uploads = uploads.count;
@@ -159,7 +167,7 @@ fn main() {
             }
         }
         trace.submit = lap();
-        let cpu_us = (now_us() - work_start) as u32;
+        let cpu_us = ((now_us() - work_start) as u32).saturating_sub(trace.wait);
         unsafe { vita2d_swap_buffers() };
 
         // A launch the host accepted: this frame (with its "Launching" line)
@@ -194,11 +202,14 @@ fn main() {
             app.stats.push(cpu_us, frame_us);
         }
         last = (trace, cpu_us);
-        if frame == 600 || frame == 1800 {
+        // At 10 s, then every 30 s: a heap or texture total that keeps
+        // growing is a leak.
+        if frame == 600 || (frame > 600 && frame % 1800 == 0) {
             host.log(&format!(
-                "frame {frame}: {} titles, textures {} KB, {}",
+                "frame {frame}: {} titles, textures {} KB, {}, {}",
                 app.len(),
                 gfx.textures.live_bytes() / 1024,
+                memory::line(),
                 app.stats.line()
             ));
         }

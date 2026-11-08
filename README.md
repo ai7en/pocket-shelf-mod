@@ -13,7 +13,7 @@ downloads on worker threads. Up to 0.1 it was a TypeScript app on
 its saved data.
 
 - Title id `POCKTSHLF`
-- Version 0.6.0
+- Version 0.6.1
 
 <p align="center">
   <img src="./screenshots/home.png" width="720" alt="Pocket Shelf's Home view on the Games tab in the Dynamic theme: the selected title's icon large at the left in a white ring, the next titles smaller after it, the title's name, platform and category, a Launch button, and the game's release year, genre, developer, publisher and players from Wikidata, over the title's backdrop." />
@@ -27,6 +27,10 @@ its saved data.
 | --- | --- | --- |
 | ![The list view: title rows with small icons, the selected row highlighted.](./screenshots/list.png) | ![The Home view on a RetroArch console tab, SNES: a game from a RetroArch playlist with its year, genre, developer, publisher, players and region from libretro's database.](./screenshots/retroarch.png) | ![The SELECT menu's Appearance page as a floating card: theme, view, text size, title line, backdrop, icon box and status bar.](./screenshots/menu.png) |
 
+| Split | Spotlight |
+| --- | --- |
+| ![The Split view: title rows with small icons at the left, the selected title's box art, name, platform and category and its year, genre, developer, publisher and players at the right.](./screenshots/split.png) | ![The Spotlight view: the selected title's backdrop over the screen, its box art at the lower left, its name, platform and category, a row of its details and a Launch button beside it.](./screenshots/spotlight.png) |
+
 The screens are rendered on the desktop by `make shots` with sample titles;
 the colored tiles with initials stand in for game icons.
 
@@ -36,10 +40,12 @@ the colored tiles with initials stand in for game icons.
   per RetroArch console, and System last. You can add your own categories,
   and rename, reorder or hide any of them. "Last Played" and "Favorites" fill
   themselves.
-- **Five views:** Home (the default), after the PS5 home screen: the selected
+- **Seven views:** Home (the default), after the PS5 home screen: the selected
   title large at the left, its name and a Launch button below; a carousel; a
-  five-column grid; a list; and a cascade after the Xbox 360 dashboard. Each
-  has three detail levels: Basic, Normal and Detailed.
+  five-column grid; a list; a cascade after the Xbox 360 dashboard; Split, the
+  list with the selected title's art and details beside it; and Spotlight, one
+  title at a time over its backdrop. Each has three detail levels: Basic,
+  Normal and Detailed.
 - **RetroArch games** from RetroArch's own playlists, one tab per console.
   Each game starts straight into the core its playlist names, without
   RetroArch's menu (see [RetroArch](#retroarch)).
@@ -97,8 +103,8 @@ the colored tiles with initials stand in for game icons.
    [![Newest release](https://img.shields.io/github/v/release/fthdgn-gh/pocket-shelf?include_prereleases&sort=semver&label=newest%20release)](https://github.com/fthdgn-gh/pocket-shelf/releases)
 
    There is no stable release yet. The current one is the beta
-   [`shelf-v0.6.0-beta.1`](https://github.com/fthdgn-gh/pocket-shelf/releases/tag/shelf-v0.6.0-beta.1)
-   ([download the VPK](https://github.com/fthdgn-gh/pocket-shelf/releases/download/shelf-v0.6.0-beta.1/pocket-shelf.vpk)).
+   [`shelf-v0.6.1-beta.1`](https://github.com/fthdgn-gh/pocket-shelf/releases/tag/shelf-v0.6.1-beta.1)
+   ([download the VPK](https://github.com/fthdgn-gh/pocket-shelf/releases/download/shelf-v0.6.1-beta.1/pocket-shelf.vpk)).
    GitHub marks betas as pre-releases, so its "Latest" label does not point to
    them. Releases come in three channels:
    - **Stable:** tested on hardware.
@@ -373,8 +379,8 @@ counts as unused, and so does box art whose name matches no title.
 touch screen:
 
 - Tap a title to select it; tap the selected title to start it.
-- Drag along the row (Home, Carousel, Cascade) or up and down the Grid and
-  the List to move through the titles; a flick keeps going and slows down.
+- Drag along the row (Home, Carousel, Cascade, Spotlight) or up and down the
+  Grid, the List and Split to move through the titles; a flick keeps going and slows down.
 - Tap a tab name, or L or R, to change tabs, or drag along the tab names
   to move through them (a flick goes on through several).
 - Tap a button hint at the bottom of the screen (△ Edit, □ Search,
@@ -492,8 +498,8 @@ Three GitHub Actions workflows build and publish the VPK:
 The tag's version must be the `version` in `vita/Cargo.toml`:
 
 ```sh
-git tag shelf-v0.6.0-beta.1   # beta: published as a pre-release
-git tag shelf-v0.6.0          # stable: published as the latest release
+git tag shelf-v0.6.1-beta.1   # beta: published as a pre-release
+git tag shelf-v0.6.1          # stable: published as the latest release
 git push origin <tag>
 ```
 

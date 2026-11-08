@@ -389,6 +389,14 @@ impl Shelf {
     /// restored; later, the selected title keeps its place.
     pub fn set_titles(&mut self, games: Vec<Game>, first: bool) {
         let keep = if first { self.settings.title.clone() } else { self.selected_game().map(|g| g.id.to_string()) };
+        if first {
+            // The saved tab again: before the titles came, it may have had
+            // nothing to show, and a folder tab, shown even empty, took its
+            // place.
+            if let Some(saved) = &self.settings.category {
+                self.tab = saved.clone();
+            }
+        }
         self.library.set_catalog(games);
         self.refresh();
         if let Some(id) = keep {
@@ -1346,7 +1354,7 @@ impl Shelf {
             t: self.t(),
             theme: &theme,
             settings: &self.settings,
-            own_launch: self.settings.view == ViewMode::Home && self.settings.detail != DetailLevel::Basic,
+            own_launch: matches!(self.settings.view, ViewMode::Home | ViewMode::Spotlight) && self.settings.detail != DetailLevel::Basic,
             search_term: &self.library.search_term,
             launching: self.launching.as_deref(),
             position: self.selected,
@@ -1622,6 +1630,8 @@ impl Shelf {
                     ViewMode::Grid => v.grid,
                     ViewMode::List => v.list,
                     ViewMode::Cascade => v.cascade,
+                    ViewMode::Split => v.split,
+                    ViewMode::Spotlight => v.spotlight,
                 };
                 (t.view, Some(name.into()), None, Both)
             }
@@ -1817,9 +1827,13 @@ impl Shelf {
         }
         if shown_any {
             // Views that leave most of the screen open get a wash clearest at
-            // the top; the grid and the list an even, darker one.
-            let open = matches!(self.settings.view, ViewMode::Carousel | ViewMode::Cascade | ViewMode::Home);
-            let colors = if open { (theme.bg_top.with_a(0x73), theme.bg_bottom.with_a(0xf2)) } else { (theme.bg_top.with_a(0xc7), theme.bg_bottom.with_a(0xf5)) };
+            // the top, Spotlight the clearest; the grid and the lists an
+            // even, darker one.
+            let colors = match self.settings.view {
+                ViewMode::Spotlight => (theme.bg_top.with_a(0x40), theme.bg_bottom.with_a(0xf2)),
+                ViewMode::Carousel | ViewMode::Cascade | ViewMode::Home => (theme.bg_top.with_a(0x73), theme.bg_bottom.with_a(0xf2)),
+                ViewMode::Grid | ViewMode::List | ViewMode::Split => (theme.bg_top.with_a(0xc7), theme.bg_bottom.with_a(0xf5)),
+            };
             let wash = match self.wash {
                 Some((c, tex)) if c == colors => tex,
                 old => {
@@ -1957,6 +1971,25 @@ mod tests {
         let infos = [info("PCSA00069", "vita", false), info("VITASHELL", "vita", false), info("ULUS10041", "psp", true)];
         shelf.set_titles(load_catalog(&infos), true);
         (shelf, host)
+    }
+
+    /// The saved tab comes back once the titles arrive, though a folder
+    /// tab (shown even empty) was the only tab before them.
+    #[test]
+    fn saved_tab_survives_an_empty_folder_tab_at_start() {
+        use crate::library::categories::ROM_FOLDERS_FILE;
+        let mut host = TestHost { files: Files::default(), accept: true, plugin: PluginState::On, launched: Vec::new(), launched_with: Vec::new(), launched_cores: Vec::new(), backdrops: Vec::new(), ahead: Vec::new(), listed: Vec::new(), rom_folders: Vec::new(), rescans: Vec::new() };
+        host.files.0.insert(ROM_FOLDERS_FILE.into(), br#"{"folders":[{"id":"roms","label":"ROMs","folder":"ux0:/data/roms"}]}"#.to_vec());
+        let library = Library::load(&mut host);
+        let mut settings = Settings::defaults(UpdateChannel::Off);
+        settings.category = Some("builtin-psp".into());
+        settings.title = Some("ULUS10042".into());
+        let mut shelf = Shelf::new(settings, library, Status::default());
+        assert_eq!(shelf.tab, "roms");
+        let info = |id: &str| TitleInfo { id: id.into(), title: format!("Title {id}"), platform: "psp".into(), adrenaline: true, ..Default::default() };
+        shelf.set_titles(load_catalog(&[info("ULUS10041"), info("ULUS10042")]), true);
+        assert_eq!(shelf.tab, "builtin-psp");
+        assert_eq!(shelf.selected_game().map(|g| g.id.to_string()).as_deref(), Some("ULUS10042"));
     }
 
     /// Every setting in the menu, changed each way, reads back the same

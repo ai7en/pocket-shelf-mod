@@ -2,14 +2,14 @@
 name = "pocket-shelf"
 # The app's version: APP_VER, the LiveArea text, the release tag's check,
 # and the update check (vita/build.rs) read it.
-version = "0.6.0"
+version = "0.6.1"
 authors = ["fthdgn"]
 edition = "2021"
 publish = false
 
 [dependencies]
 shelf-core = { path = "../core" }
-vitasdk-sys = { version = "0.3.3", features = ["SceAppMgr_stub", "SceAppUtil_stub", "SceCtrl_stub", "SceGxm_stub", "SceLibKernel_stub", "SceKernelThreadMgr_stub", "SceNet_stub", "SceNetCtl_stub", "ScePower_stub", "SceRegistryMgr_stub", "SceRtc_stub", "SceSqlite_stub", "SceSysmodule_stub", "ScePromoterUtil_stub", "SceTouch_stub", "SceCommonDialog_stub"] }
+vitasdk-sys = { version = "0.3.3", features = ["SceAppMgr_stub", "SceAppUtil_stub", "SceCtrl_stub", "SceGxm_stub", "SceLibKernel_stub", "SceKernelThreadMgr_stub", "SceNet_stub", "SceNetCtl_stub", "ScePower_stub", "SceRegistryMgr_stub", "SceRtc_stub", "SceSqlite_stub", "SceSysmem_stub", "SceSysmodule_stub", "ScePromoterUtil_stub", "SceTouch_stub", "SceCommonDialog_stub"] }
 vita2d-sys = "0.1.1"
 png = "0.17"
 # Raw deflate for CSO disc images and RetroArch's compressed playlists.
