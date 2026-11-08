@@ -213,6 +213,10 @@ const SHOTS: &[Shot] = &[
     shot("120-editor", &[(0, 4), (TRIANGLE, TAP), (0, TAP), (0, SETTLE)]),
     shot("121-editor-favorite", &[(0, 4), (TRIANGLE, TAP), (0, TAP), (CIRCLE, TAP), (0, TAP), (0, SETTLE)]),
     shot("122-editor-category", &[(0, 4), (TRIANGLE, TAP), (0, TAP), (DOWN, TAP), (0, TAP), (RIGHT, TAP), (0, TAP), (0, SETTLE)]),
+    // The editor's last rows (Vita games): Delete with data asks before it
+    // acts, and Shrink reports what it freed.
+    shot("122a-editor-delete-asks", &[(0, 4), (TRIANGLE, TAP), (0, TAP), (UP, TAP), (0, TAP), (CIRCLE, TAP), (0, TAP), (0, SETTLE)]),
+    shot("122b-editor-shrink-done", &[(0, 4), (TRIANGLE, TAP), (0, TAP), (UP, TAP), (0, TAP), (UP, TAP), (0, TAP), (UP, TAP), (0, TAP), (CIRCLE, TAP), (0, TAP), (CIRCLE, TAP), (0, TAP), (0, SETTLE)]),
     shot("123-art-picker", &[(0, 4), (TRIANGLE, TAP), (0, TAP), (DOWN, TAP), (0, TAP), (DOWN, TAP), (0, TAP), (DOWN, TAP), (0, TAP), (CIRCLE, TAP), (0, TAP), (0, SETTLE)]),
     shot("124-art-picker-all-broken", &[(0, 4), (TRIANGLE, TAP), (0, TAP), (DOWN, TAP), (0, TAP), (DOWN, TAP), (0, TAP), (DOWN, TAP), (0, TAP), (CIRCLE, TAP), (0, TAP), (TRIANGLE, TAP), (0, TAP), (DOWN, TAP), (0, TAP), (DOWN, TAP), (0, TAP), (DOWN, TAP), (0, TAP), (0, SETTLE), (CIRCLE, TAP), (0, SETTLE)]),
     shot("125-art-picked", &[(0, 4), (TRIANGLE, TAP), (0, TAP), (DOWN, TAP), (0, TAP), (DOWN, TAP), (0, TAP), (DOWN, TAP), (0, TAP), (CIRCLE, TAP), (0, TAP), (DOWN, TAP), (0, TAP), (DOWN, TAP), (0, TAP), (DOWN, TAP), (0, TAP), (CIRCLE, TAP), (0, TAP), (0, SETTLE), (CROSS, TAP), (0, TAP), (0, SETTLE)]),

@@ -706,3 +706,13 @@ dotless i.
   setting are not seen on hardware; game updates (`PBOOT.PBP`) for images and
   ZSO are not done.
 - See `PLAN.md`, Follow-ups.
+
+## Retro Shelf (this fork)
+
+- **Identity.** The build is **Retro Shelf**, title id **`RETROSHLF`**, data folder **`ux0:data/RetroShelf`**. It installs next to Pocket Shelf (`POCKTSHLF`, `ux0:data/PocketShelf`) and shares no saved data with it. `can_install_update` is false for any title id other than `POCKTSHLF`, so the update check stays off. Copy a settings file from `ux0:data/PocketShelf` into the new folder to carry it over.
+- **Plugins.** `shell-boot/main.c` carries the new `SELF` and `DATA`; the committed `vita/package/tai/pocketshelf_boot.suprx` is still the build for `POCKTSHLF` until `make shell-plugin` runs with VitaSDK. Until then SELECT ▸ System ▸ Console start does not work in this build. `psp-boot` keeps `ms0:/PocketShelf/boot.txt`, so Adrenaline launches are unchanged.
+- **Editor rows for Vita games** (TRIANGLE on a title): **Shrink game**, **Delete game**, **Delete game and its data**. Each asks on the first press and acts on the second. The work runs in `vita/src/platform/gamework.rs` on one worker thread and answers with `Event::GameWork`.
+  - **Shrink** (as ONEMenu's Shrink Game) removes `ux0:app/<id>/sce_sys/manual` and each file of `ux0:app/<id>` that exists at the same path in `ux0:patch/<id>` or `ux0:rePatch/<id>`. `sce_sys`, `eboot.bin` and `sce_module` stay. A game shrunk against `ux0:rePatch` needs the rePatch plugin to start.
+  - **Delete** closes the game, then calls `scePromoterUtilityDeletePkg` through the `Promoter` the updater uses.
+  - **Delete and its data** also removes `ux0:data/<id>` and `ux0:rePatch/<id>`. A homebrew that keeps its data under another name (Retro Adhoc: `ux0:data/RetroAdhoc`) leaves that folder.
+- **Not confirmed on hardware.** None of the three has run on a console; the uninstall call and the shrink result need a test with a game that has a patch.

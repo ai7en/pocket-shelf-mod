@@ -888,6 +888,14 @@ impl Host for FakeHost {
         true
     }
 
+    fn game_work(&mut self, id: &str, work: shelf_core::host::GameWork) -> bool {
+        // What the renders show: a shrink frees
+        // 212 MB, a delete works.
+        let freed = if work == shelf_core::host::GameWork::Shrink { 212 * 1024 * 1024 } else { 0 };
+        self.later.push(Event::GameWork(id.to_string(), work, Ok(freed)));
+        true
+    }
+
     /// Browse's memory card: a few folders with PNG files and others.
     fn rescan_some(&mut self, phases: Vec<ScanPhase>) {
         self.scanning = Some(self.frame);

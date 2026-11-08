@@ -293,10 +293,10 @@ fn copy_tree(from: &str, to: &str) -> Result<(), String> {
 
 /// The installer is part of the system's PAF library, which has to be loaded first.
 /// The argument block and options are the values the system expects for it.
-struct Promoter;
+pub(super) struct Promoter;
 
 impl Promoter {
-    unsafe fn open() -> Result<Self, String> {
+    pub(super) unsafe fn open() -> Result<Self, String> {
         use vitasdk_sys::*;
         let mut argp: [u32; 6] = [0x18_0000, u32::MAX, u32::MAX, 1, u32::MAX, u32::MAX];
         let mut result: i32 = -1;

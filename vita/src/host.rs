@@ -578,6 +578,21 @@ impl Host for VitaHost {
         true
     }
 
+    fn game_work(&mut self, id: &str, work: shelf_core::host::GameWork) -> bool {
+        if !crate::platform::gamework::begin() {
+            return false;
+        }
+        let (id, sender) = (id.to_string(), self.answer_sender.clone());
+        spawn("shelf-work", move || {
+            let started = now_us();
+            let result = crate::platform::gamework::run(&id, work);
+            log_line(&format!("game work {work:?} {id}: {result:?} in {} ms", (now_us() - started) / 1000));
+            crate::platform::gamework::end();
+            let _ = sender.send(Event::GameWork(id, work, result));
+        });
+        true
+    }
+
     fn plugin_state(&mut self) -> PluginState {
         match crate::platform::pspemu::plugin_state() {
             "noAdrenaline" => PluginState::NoAdrenaline,

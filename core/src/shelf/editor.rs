@@ -33,6 +33,12 @@ pub(super) enum Row {
     Backdrop,
     FindArt,
     Reset,
+    /// Remove the manual and the files a patch replaces (Vita games).
+    Shrink,
+    /// Uninstall the game.
+    Delete,
+    /// Uninstall the game with its folders in `data` and `rePatch`.
+    DeleteWithData,
 }
 
 /// The rows for a title: Open with only when several apps can start it, Core
@@ -46,7 +52,21 @@ pub(super) fn editor_rows(game: &crate::library::catalog::Game, cores: bool) -> 
     if !cores {
         rows.retain(|row| *row != Core);
     }
+    // Only an installed Vita game (and homebrew), never this app itself.
+    if game.platform == crate::library::categories::Platform::Vita && *game.id != *crate::autostart::SELF_ID {
+        rows.extend([Shrink, Delete, DeleteWithData]);
+    }
     rows
+}
+
+/// A size as one decimal in MB or GB (`12.3 MB`).
+fn format_size(bytes: u64) -> String {
+    let mb = bytes as f64 / (1024.0 * 1024.0);
+    if mb >= 1024.0 {
+        format!("{:.1} GB", mb / 1024.0)
+    } else {
+        format!("{mb:.1} MB")
+    }
 }
 
 /// A core as the Core row names it: RetroArch's without `_libretro.self`.
@@ -79,6 +99,10 @@ pub struct Editor {
     /// The cores each app can start the title with, from the host (empty
     /// until it answers, and for a title no core app opens).
     pub cores: Vec<crate::host::CoreList>,
+    /// The Shrink or Delete row a first press asked about.
+    pub(super) armed: Option<Row>,
+    /// A shrink or delete runs on the host.
+    pub busy: bool,
 }
 
 /// The art or backdrop picker: the fixed rows ("Default", then "Game icon"
@@ -189,7 +213,7 @@ impl Shelf {
         if game.opens.retroarch || game.opens.emu4vita {
             host.cores(&id);
         }
-        self.editor = Some(Editor { id, row: 0, note: String::new(), cores: Vec::new() });
+        self.editor = Some(Editor { id, row: 0, note: String::new(), cores: Vec::new(), armed: None, busy: false });
         self.drawer = panel::slide();
         self.drawer.set(1.0, self.now);
     }
@@ -249,8 +273,16 @@ impl Shelf {
         let at = editor.row;
         let row = rows.get(at).copied().unwrap_or(Row::Reset);
         match step {
-            Some(Nav::Press(Direction::Up)) | Some(Nav::Repeat(Direction::Up, _)) => editor.row = (at + count - 1) % count,
-            Some(Nav::Press(Direction::Down)) | Some(Nav::Repeat(Direction::Down, _)) => editor.row = (at + 1) % count,
+            Some(Nav::Press(Direction::Up)) | Some(Nav::Repeat(Direction::Up, _)) => {
+                editor.row = (at + count - 1) % count;
+                editor.armed = None;
+                editor.note.clear();
+            }
+            Some(Nav::Press(Direction::Down)) | Some(Nav::Repeat(Direction::Down, _)) => {
+                editor.row = (at + 1) % count;
+                editor.armed = None;
+                editor.note.clear();
+            }
             Some(Nav::Press(Direction::Left)) | Some(Nav::Press(Direction::Right)) => {
                 let delta = if matches!(step, Some(Nav::Press(Direction::Left))) { -1 } else { 1 };
                 match row {
@@ -278,6 +310,7 @@ impl Shelf {
                 Row::Backdrop => self.open_picker(host, true),
                 Row::FindArt => self.start_online(host),
                 Row::Reset => self.reset_game(host),
+                Row::Shrink | Row::Delete | Row::DeleteWithData => self.game_work_press(host, row),
             }
         } else if cancel {
             self.editor = None;
@@ -351,6 +384,58 @@ impl Shelf {
         let done = self.t().reset_done;
         if let Some(editor) = &mut self.editor {
             editor.note = done.to_string();
+        }
+    }
+
+    /// Shrink, Delete and Delete with data: the first press asks, the second
+    /// hands the work to the host, which runs it off the frame.
+    fn game_work_press(&mut self, host: &mut dyn Host, row: Row) {
+        use crate::host::GameWork;
+        let Some(game) = self.editor_game() else { return };
+        let t = self.t();
+        let Some(editor) = &mut self.editor else { return };
+        if editor.busy {
+            return;
+        }
+        let (work, ask) = match row {
+            Row::Shrink => (GameWork::Shrink, t.confirm_shrink),
+            Row::Delete => (GameWork::Delete, t.confirm_delete),
+            _ => (GameWork::DeleteWithData, t.confirm_delete_data),
+        };
+        if editor.armed != Some(row) {
+            editor.armed = Some(row);
+            editor.note = fill(ask, &[("name", &game.title)]);
+            return;
+        }
+        editor.armed = None;
+        if host.game_work(&game.id, work) {
+            editor.busy = true;
+            editor.note = t.working.to_string();
+        } else {
+            editor.note = fill(t.failed, &[("reason", "unavailable")]);
+        }
+    }
+
+    /// The host's answer for a shrink or delete. A deleted game closes the
+    /// editor and the Vita titles are read again; a shrink reports what it freed.
+    pub fn game_work_done(&mut self, host: &mut dyn Host, id: &str, work: crate::host::GameWork, result: Result<u64, String>) {
+        use crate::host::GameWork;
+        let t = self.t();
+        let Some(editor) = self.editor.as_mut().filter(|e| e.id == id) else {
+            if work != GameWork::Shrink && result.is_ok() {
+                host.rescan_some(vec![crate::host::ScanPhase::Apps]);
+            }
+            return;
+        };
+        editor.busy = false;
+        match (work, result) {
+            (GameWork::Shrink, Ok(0)) => editor.note = t.shrink_none.to_string(),
+            (GameWork::Shrink, Ok(bytes)) => editor.note = fill(t.shrink_done, &[("size", &format_size(bytes))]),
+            (_, Ok(_)) => {
+                self.editor = None;
+                host.rescan_some(vec![crate::host::ScanPhase::Apps]);
+            }
+            (_, Err(reason)) => editor.note = fill(t.failed, &[("reason", &reason)]),
         }
     }
 
@@ -435,6 +520,9 @@ impl Shelf {
                 Row::Backdrop => (t.backdrop, fit(gfx, &backdrop), Step::Right),
                 Row::FindArt => (t.find_art, scraper.to_string(), Step::Both),
                 Row::Reset => (t.reset, String::new(), Step::None),
+                Row::Shrink => (t.shrink, String::new(), Step::None),
+                Row::Delete => (t.delete_game, String::new(), Step::None),
+                Row::DeleteWithData => (t.delete_game_data, String::new(), Step::None),
             })
             .collect();
         let slide = self.drawer.at(self.now);

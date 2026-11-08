@@ -1894,6 +1894,8 @@ mod tests {
         rom_folders: Vec<(Vec<String>, bool)>,
         /// Rescans asked for: the phases, or None for a full scan.
         rescans: Vec<Option<Vec<crate::host::ScanPhase>>>,
+        /// Shrinks and deletes handed to the host.
+        works: Vec<(String, crate::host::GameWork)>,
     }
 
     impl Host for TestHost {
@@ -1922,6 +1924,10 @@ mod tests {
         }
         fn rescan_some(&mut self, phases: Vec<crate::host::ScanPhase>) {
             self.rescans.push(Some(phases));
+        }
+        fn game_work(&mut self, id: &str, work: crate::host::GameWork) -> bool {
+            self.works.push((id.to_string(), work));
+            true
         }
         fn request(&mut self, key: PictureKey) {
             if matches!(key, PictureKey::Backdrop { .. }) {
@@ -1956,7 +1962,7 @@ mod tests {
     }
 
     fn setup(accept: bool, plugin: PluginState) -> (Shelf, TestHost) {
-        let mut host = TestHost { files: Files::default(), accept, plugin, launched: Vec::new(), launched_with: Vec::new(), launched_cores: Vec::new(), backdrops: Vec::new(), ahead: Vec::new(), listed: Vec::new(), rom_folders: Vec::new(), rescans: Vec::new() };
+        let mut host = TestHost { files: Files::default(), accept, plugin, launched: Vec::new(), launched_with: Vec::new(), launched_cores: Vec::new(), backdrops: Vec::new(), ahead: Vec::new(), listed: Vec::new(), rom_folders: Vec::new(), rescans: Vec::new(), works: Vec::new() };
         host.files.0.insert(RECENT_FILE.into(), b"[\"VITASHELL\"]\n".to_vec());
         let library = Library::load(&mut host);
         let mut shelf = Shelf::new(Settings::defaults(UpdateChannel::Off), library, Status::default());
@@ -1978,7 +1984,7 @@ mod tests {
     #[test]
     fn saved_tab_survives_an_empty_folder_tab_at_start() {
         use crate::library::categories::ROM_FOLDERS_FILE;
-        let mut host = TestHost { files: Files::default(), accept: true, plugin: PluginState::On, launched: Vec::new(), launched_with: Vec::new(), launched_cores: Vec::new(), backdrops: Vec::new(), ahead: Vec::new(), listed: Vec::new(), rom_folders: Vec::new(), rescans: Vec::new() };
+        let mut host = TestHost { files: Files::default(), accept: true, plugin: PluginState::On, launched: Vec::new(), launched_with: Vec::new(), launched_cores: Vec::new(), backdrops: Vec::new(), ahead: Vec::new(), listed: Vec::new(), rom_folders: Vec::new(), rescans: Vec::new(), works: Vec::new() };
         host.files.0.insert(ROM_FOLDERS_FILE.into(), br#"{"folders":[{"id":"roms","label":"ROMs","folder":"ux0:/data/roms"}]}"#.to_vec());
         let library = Library::load(&mut host);
         let mut settings = Settings::defaults(UpdateChannel::Off);
@@ -2055,6 +2061,45 @@ mod tests {
         let game = shelf.library.game("PCSA00069").unwrap();
         assert_eq!((game.art.clone(), game.backdrop.clone()), (None, None));
         assert_eq!(shelf.library.game("VITASHELL").unwrap().art, None);
+    }
+
+    /// Shrink, Delete and Delete with data ask first and act on the second
+    /// press; only an installed Vita game has them, never this app.
+    #[test]
+    fn shrink_and_delete_ask_twice_and_reach_the_host() {
+        use crate::host::GameWork;
+        let (mut shelf, mut host) = setup(true, PluginState::On);
+        shelf.apply_search("PCSA00069");
+        assert_eq!(shelf.selected_game().map(|g| g.id.to_string()).as_deref(), Some("PCSA00069"));
+        press(&mut shelf, &mut host, TRIANGLE);
+        let rows = shelf.editor_row_list();
+        assert_eq!(rows[rows.len() - 3..], [editor::Row::Shrink, editor::Row::Delete, editor::Row::DeleteWithData]);
+        let go_to = |shelf: &mut Shelf, row: editor::Row| {
+            let rows = shelf.editor_row_list();
+            shelf.editor.as_mut().unwrap().row = rows.iter().position(|r| *r == row).unwrap();
+        };
+        // The first press asks, the second hands the work over.
+        go_to(&mut shelf, editor::Row::DeleteWithData);
+        press(&mut shelf, &mut host, CIRCLE);
+        assert!(host.works.is_empty());
+        assert!(shelf.editor.as_ref().unwrap().note.contains("Title PCSA00069"));
+        press(&mut shelf, &mut host, CIRCLE);
+        assert_eq!(host.works, [("PCSA00069".to_string(), GameWork::DeleteWithData)]);
+        assert!(shelf.editor.as_ref().unwrap().busy);
+        // The answer closes the editor and reads the Vita titles again.
+        shelf.game_work_done(&mut host, "PCSA00069", GameWork::DeleteWithData, Ok(0));
+        assert!(shelf.editor.is_none());
+        assert_eq!(host.rescans.last(), Some(&Some(vec![crate::host::ScanPhase::Apps])));
+        // A shrink stays in the editor and says what it freed.
+        shelf.apply_search("PCSA00069");
+        press(&mut shelf, &mut host, TRIANGLE);
+        go_to(&mut shelf, editor::Row::Shrink);
+        shelf.game_work_done(&mut host, "PCSA00069", GameWork::Shrink, Ok(3 * 1024 * 1024));
+        assert_eq!(shelf.editor.as_ref().unwrap().note, "Freed 3.0 MB");
+        // The shelf's own title has none of the three.
+        let own = TitleInfo { id: "RETROSHLF".into(), title: "Retro Shelf".into(), platform: "vita".into(), ..Default::default() };
+        let own = load_catalog(&[own]);
+        assert!(!editor::editor_rows(&own[0], false).contains(&editor::Row::Delete));
     }
 
     #[test]

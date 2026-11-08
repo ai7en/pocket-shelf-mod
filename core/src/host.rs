@@ -229,6 +229,18 @@ pub enum DecodeAs {
     Backdrop,
 }
 
+/// What the editor asks the host to do to an installed game (Vita titles).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum GameWork {
+    /// Remove the manual and the files of `ux0:app/<id>` that a patch in
+    /// `ux0:patch/<id>` or `ux0:rePatch/<id>` replaces.
+    Shrink,
+    /// Uninstall the game.
+    Delete,
+    /// Uninstall the game and delete `ux0:data/<id>` and `ux0:rePatch/<id>`.
+    DeleteWithData,
+}
+
 pub enum Event {
     /// A scan is running, with no title list to read: steps done of the
     /// total, and the phase. Only a scan sends it; a start that reads the
@@ -274,6 +286,9 @@ pub enum Event {
     Folder(String, Option<Vec<FolderEntry>>),
     /// A title's cores in each app that can start it ([`Host::cores`]).
     Cores(String, Vec<CoreList>),
+    /// [`Host::game_work`] finished: the bytes freed, or the reason it
+    /// failed.
+    GameWork(String, GameWork, Result<u64, String>),
 }
 
 /// Whether Adrenaline loads Pocket Shelf's boot plugin, which starts a PSP
@@ -511,6 +526,14 @@ pub trait Host {
     }
 
     fn cores(&mut self, _id: &str) -> bool {
+        false
+    }
+
+    /// Shrink, uninstall or uninstall with its data folders one installed
+    /// game, on a worker thread (a game's folder holds thousands of
+    /// files); answered with [`Event::GameWork`]. False when this host
+    /// cannot or is busy.
+    fn game_work(&mut self, _id: &str, _work: GameWork) -> bool {
         false
     }
 

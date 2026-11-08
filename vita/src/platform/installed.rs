@@ -1325,7 +1325,7 @@ pub unsafe fn finish_launch() {
 /// Close an app (RetroArch, Emu4Vita++) when it is running, and wait up to
 /// a second for it to be gone. Called right before a request that starts it
 /// with a game.
-unsafe fn close_app(name: &core::ffi::CStr) {
+pub(super) unsafe fn close_app(name: &core::ffi::CStr) {
     let mut pid: vitasdk_sys::SceUID = 0;
     if vitasdk_sys::sceAppMgrGetIdByName(&mut pid, name.as_ptr()) < 0 {
         return;
