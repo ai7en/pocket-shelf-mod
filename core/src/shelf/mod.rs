@@ -2567,8 +2567,11 @@ mod tests {
         press(&mut shelf, &mut host, CIRCLE);
         let game = shelf.library.game("PCSA00069").unwrap();
         assert!(game.favorite && &*game.title == "Title PCSA00069");
-        // Favorite off as well: no changes left, the file is deleted.
-        press(&mut shelf, &mut host, DOWN);
+        // Favorite off as well: no changes left, the file is deleted. Past
+        // Reset come Shrink, Delete and Delete with data, then Favorite.
+        for _ in 0..4 {
+            press(&mut shelf, &mut host, DOWN);
+        }
         press(&mut shelf, &mut host, CIRCLE);
         assert!(!host.files.0.contains_key("titles/PCSA00069.json"));
     }
