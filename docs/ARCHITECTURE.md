@@ -57,7 +57,7 @@ glyph changed.
 | `make art` | Redraw the LiveArea pictures and `template.xml` in `vita/package/sce_sys/` |
 | `make updater` | Build the updater app into `vita/package/updater/` (VitaSDK) |
 | `make plugin` | Build the Adrenaline plugin into `vita/package/psp/` (pspdev) |
-| `make shell-plugin` | Build the console start plugin into `vita/package/tai/pocketshelf_boot.suprx` (VitaSDK) |
+| `make shell-plugin` | Build the console start plugin into `vita/package/tai/retroshelf_boot.suprx` (VitaSDK) |
 | `make wikidata` | Build the game details tables from Wikidata into `.build/wikidata/` (`TABLES="nes snes"` for some) and print the sample playlists' match rates; `.github/workflows/gamedb-data.yml` runs the build weekly and puts the tables on the `gamedb-data` release |
 
 **The SELF must not be "safe".** cargo-vita signs with `vita-make-fself -s`;
@@ -100,7 +100,7 @@ details reset at each start), pictures in `art/` and `backdrops/`, downloads to
 `libretro/`, `gamedb/`, `wikidata/` and `update/`, and `gamedb/crcs.tsv`,
 `gamedb/known.tsv` and `wikidata/found.tsv` (written by the threads that
 identify and match titles), and outside the data folder only SELECT ▸
-Console start's tai config line, `ur0:tai/pocketshelf_boot.suprx` and
+Console start's tai config line, `ur0:tai/retroshelf_boot.suprx` and
 AutoBoot's `boot.cfg` (`platform/autostart.rs`); it deletes only `titles/<id>.json` and pictures. **Writes run on a file thread, in
 order** (`FileOp` in `vita/host.rs`): on hardware a `settings.json` write
 in the frame took 24–30 ms, so every view change was a missed refresh.

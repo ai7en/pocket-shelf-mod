@@ -1,5 +1,5 @@
 /*
- * Pocket Shelf console start plugin: a taiHEN user plugin for the home
+ * Retro Shelf console start plugin: a taiHEN user plugin for the home
  * screen (SceShell, the `*main` section of the tai config).
  *
  * It does two things, each switched on in Pocket Shelf (SELECT > System > Console
@@ -268,8 +268,8 @@ int module_start(SceSize argc, const void *args) {
   SceUID fd = sceIoOpen(LOG, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0666);
   if (fd >= 0)
     sceIoClose(fd);
-  log_line("Pocket Shelf console start plugin");
-  SceUID thread = sceKernelCreateThread("pocketshelf_boot", plugin_thread, 0xA0, 0x4000, 0, 0, NULL);
+  log_line("Retro Shelf console start plugin");
+  SceUID thread = sceKernelCreateThread("retroshelf_boot", plugin_thread, 0xA0, 0x4000, 0, 0, NULL);
   if (thread >= 0)
     sceKernelStartThread(thread, 0, NULL);
   return SCE_KERNEL_START_SUCCESS;

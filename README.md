@@ -158,7 +158,7 @@ boots the game and adds a line to `boot.log` next to it.
   the title it had.
 - **Otherwise**, turning either setting on offers Pocket Shelf's own plugin.
   Nothing changes until you press a second time: the plugin is then copied to
-  `ur0:tai/pocketshelf_boot.suprx` and one line is added under `*main`, with a
+  `ur0:tai/retroshelf_boot.suprx` and one line is added under `*main`, with a
   copy of the old config kept as `config.txt.pocketshelf.bak`. The Plugin row
   removes it the same way. Return after a game always needs this plugin.
 

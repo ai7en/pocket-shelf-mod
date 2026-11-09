@@ -52,4 +52,4 @@ plugin:
 shell-plugin:
 	PATH="$(VITASDK)/bin:$$PATH" VITASDK="$(VITASDK)" $(MAKE) -C shell-boot
 	mkdir -p vita/package/tai
-	cp .build/shell-boot/pocketshelf_boot.suprx vita/package/tai/pocketshelf_boot.suprx
+	cp .build/shell-boot/retroshelf_boot.suprx vita/package/tai/retroshelf_boot.suprx

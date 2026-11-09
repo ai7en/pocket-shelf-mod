@@ -1,7 +1,7 @@
 //! SELECT ▸ System ▸ Console start: Pocket Shelf opened at console start, and again
 //! when a game it started closes. Both are done by a taiHEN plugin in the
 //! home screen (SceShell, the tai config's `*main` section): Pocket Shelf's
-//! own (`shell-boot/`, shipped in the VPK as `tai/pocketshelf_boot.suprx`),
+//! own (`shell-boot/`, shipped in the VPK as `tai/retroshelf_boot.suprx`),
 //! or for console start only, Rinnegatamante's AutoBoot, set to start
 //! `POCKTSHLF` (`ux0:data/AutoBoot/boot.cfg`).
 //!
@@ -27,9 +27,9 @@ pub const PLUGIN_LOG: &str = "boot-plugin.log";
 
 /// Pocket Shelf's plugin: its file name, where it is copied from in the
 /// app's folder, and where it is installed.
-pub const OUR_PLUGIN: &str = "pocketshelf_boot.suprx";
-pub const OUR_PLUGIN_SOURCE: &str = "app0:tai/pocketshelf_boot.suprx";
-pub const OUR_PLUGIN_PATH: &str = "ur0:tai/pocketshelf_boot.suprx";
+pub const OUR_PLUGIN: &str = "retroshelf_boot.suprx";
+pub const OUR_PLUGIN_SOURCE: &str = "app0:tai/retroshelf_boot.suprx";
+pub const OUR_PLUGIN_PATH: &str = "ur0:tai/retroshelf_boot.suprx";
 
 /// AutoBoot's file name, and the file holding the title it starts (nine
 /// bytes, the title id).
@@ -237,7 +237,7 @@ mod tests {
     fn the_plugin_goes_first_in_main_and_comes_out_again() {
         assert_eq!(find_plugins(CONFIG), Found { ours: false, autoboot: true });
         let added = with_plugin(CONFIG);
-        assert!(added.contains("*main\r\nur0:tai/pocketshelf_boot.suprx\r\nux0:tai/AutoBoot.suprx\r\n"), "{added:?}");
+        assert!(added.contains("*main\r\nur0:tai/retroshelf_boot.suprx\r\nux0:tai/AutoBoot.suprx\r\n"), "{added:?}");
         assert_eq!(find_plugins(&added), Found { ours: true, autoboot: true });
         assert!(only_ours_changed(CONFIG, &added));
         assert_eq!(with_plugin(&added), added, "once");
@@ -246,13 +246,13 @@ mod tests {
         // No *main: a section at the end, in the file's line endings.
         let plain = "*KERNEL\nur0:tai/a.skprx";
         let added = with_plugin(plain);
-        assert_eq!(added, "*KERNEL\nur0:tai/a.skprx\n*main\nur0:tai/pocketshelf_boot.suprx\n");
+        assert_eq!(added, "*KERNEL\nur0:tai/a.skprx\n*main\nur0:tai/retroshelf_boot.suprx\n");
         assert!(only_ours_changed(plain, &added));
-        assert_eq!(with_plugin(""), "*main\nur0:tai/pocketshelf_boot.suprx\n");
+        assert_eq!(with_plugin(""), "*main\nur0:tai/retroshelf_boot.suprx\n");
 
         // A plugin of that name in another section, or commented out, is
         // not ours in *main; and a change to another line is caught.
-        assert!(!find_plugins("*NPXS10015\nur0:tai/pocketshelf_boot.suprx\n*main\n# ur0:tai/pocketshelf_boot.suprx\n").ours);
+        assert!(!find_plugins("*NPXS10015\nur0:tai/retroshelf_boot.suprx\n*main\n# ur0:tai/retroshelf_boot.suprx\n").ours);
         assert!(!only_ours_changed(CONFIG, &CONFIG.replace("nonpdrm", "other")));
     }
 

@@ -97,6 +97,9 @@ jobs:
       # Core, platform module and tools tests on the runner's own Rust, then
       # the VPK (vita/build.rs reads the tag from GITHUB_REF_NAME).
       - run: make test
+      # The console start plugin (shell-boot/) with VitaSDK's compiler; the
+      # VPK packs vita/package/tai.
+      - run: make shell-plugin
       - run: make build
 
       # A signed record that this workflow built the VPK from this commit;

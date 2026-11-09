@@ -1,7 +1,7 @@
 # Pocket Shelf console start plugin (see main.c), a taiHEN user plugin for
 # the home screen. Built with VitaSDK: `make shell-plugin`, which copies the
-# result to vita/package/tai/pocketshelf_boot.suprx for the VPK.
-TARGET = pocketshelf_boot
+# result to vita/package/tai/retroshelf_boot.suprx for the VPK.
+TARGET = retroshelf_boot
 BUILD  = ../.build/shell-boot
 
 PREFIX = arm-vita-eabi
