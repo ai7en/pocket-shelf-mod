@@ -184,8 +184,11 @@ impl Art {
         }
         self.requested.remove(key);
         let used = self.clock;
-        let loaded = picture.map(|picture| {
-            let boxed = box_colors(picture.accent).map(|(top, bottom)| gfx.gradient_sized(top, bottom, 32));
+        let loaded = picture.map(|mut picture| {
+            // Rounded corners on the part that shows (a PSP icon's rectangle).
+            let [_, _, cw, ch] = picture.content;
+            crate::shapes::round_corners_in(&mut picture.rgba, picture.w, picture.content, crate::shapes::tile_radius(cw as f32, ch as f32));
+            let boxed = box_colors(picture.accent).map(|(top, bottom)| gfx.gradient_tile(top, bottom, 64));
             let color = picture.accent.map(|a| a & 0xffffff);
             let bytes = rgba_bytes(picture.w, picture.h) + if boxed.is_some() { BOX_BYTES } else { 0 };
             let shown = shown_part(picture.content, picture.w, picture.h);
@@ -262,7 +265,7 @@ impl Art {
             gfx.image_full(loaded.tex, rect, tint);
             return;
         }
-        let tints = *self.tints.get_or_insert_with(|| TINT_ART.map(|(top, bottom)| gfx.gradient_sized(Color::rgb(top), Color::rgb(bottom), 64)));
+        let tints = *self.tints.get_or_insert_with(|| TINT_ART.map(|(top, bottom)| gfx.gradient_tile(Color::rgb(top), Color::rgb(bottom), 96)));
         gfx.image_full(tints[game.tint as usize % TINT_COUNT], rect, tint);
         // The current UI's text-4xl on the large tiles, text-xl on the grid,
         // text-xs on the list's: about 0.29 of the side for two letters, a
@@ -294,12 +297,13 @@ fn initials_base(size: f32) -> u8 {
 /// The ring around the selected tile: 4 thick, 6 clear of the art, in the
 /// text color, scaled with the tile (`SelectedFrame`).
 pub fn selected_frame(gfx: &mut Gfx, rect: Rect, k: f32, color: Color) {
-    gfx.round_rect(rect.grow(10.0 * k), 6.0 * k, 4.0 * k, color);
+    // Concentric with the art's corners, 10 scaled pixels out.
+    gfx.round_rect(rect.grow(10.0 * k), crate::shapes::tile_radius(rect.w, rect.h) + 10.0 * k, 4.0 * k, color);
 }
 
 /// The soft shadow under the selected tile (`TileShadow`, `shadow-lg`).
 pub fn tile_shadow(gfx: &mut Gfx, rect: Rect, opacity: f32) {
-    gfx.shadow(Rect::new(rect.x, rect.y + 6.0, rect.w, rect.h), 0.0, 12.0, BLACK.with_a(90).alpha(opacity));
+    gfx.shadow(Rect::new(rect.x, rect.y + 6.0, rect.w, rect.h), crate::shapes::tile_radius(rect.w, rect.h), 12.0, BLACK.with_a(90).alpha(opacity));
 }
 
 #[cfg(test)]

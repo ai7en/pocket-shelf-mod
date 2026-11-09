@@ -146,12 +146,17 @@ impl Header {
             let active = i == index;
             let (role, color) = if active { (Role::BodyBold, theme.text) } else { (Role::Body, theme.dim) };
             let center = names_x + left + name.width / 2.0;
+            if active {
+                // A translucent rounded plate with a soft halo behind the
+                // name. The renderer has no blur pass: the halo stands in
+                // for frosted glass.
+                let plate = Rect::new(center - name.width / 2.0 - 16.0, top - 8.0, name.width + 32.0, line + 16.0);
+                gfx.shadow(plate, 18.0, 10.0, theme.text.with_a(0x16).alpha(opacity));
+                gfx.round_rect(plate, 18.0, 0.0, theme.text.with_a(0x30).alpha(opacity));
+            }
             gfx.text_top_centered(role, center, top, color.alpha(opacity), &name.label);
             // The name and half the gap on each side, inside the clip.
             gfx.hit(Rect::new(names_x + left - TAB_GAP / 2.0, 0.0, name.width + TAB_GAP, BAR_H), Hit::Tab(name.id.clone()));
-            if active {
-                gfx.round_rect(Rect::new(center - 14.0, top + line + 6.0, 28.0, 4.0), 2.0, 0.0, theme.accent.alpha(opacity));
-            }
         }
         gfx.clip(None);
 

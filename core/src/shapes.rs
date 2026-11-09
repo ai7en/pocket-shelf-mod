@@ -204,6 +204,20 @@ impl Gfx {
         self.gradient_sized(top, bottom, 256)
     }
 
+    /// A vertical gradient square `size` texels wide with rounded corners
+    /// ([`TILE_CORNER`]), stretched over a tile.
+    pub fn gradient_tile(&mut self, top: Color, bottom: Color, size: u32) -> TexId {
+        let mut pixels = Vec::with_capacity((size * size * 4) as usize);
+        for y in 0..size {
+            let c = top.lerp(bottom, y as f32 / (size - 1) as f32);
+            for _ in 0..size {
+                pixels.extend_from_slice(&[c.r, c.g, c.b, c.a]);
+            }
+        }
+        round_corners(&mut pixels, size, size, tile_radius(size as f32, size as f32));
+        self.add_texture(size, size, Format::Rgba8, pixels, true)
+    }
+
     /// A vertical gradient `steps` texels high (8 wide), for small areas.
     pub fn gradient_sized(&mut self, top: Color, bottom: Color, steps: u32) -> TexId {
         let mut pixels = Vec::with_capacity((8 * steps * 4) as usize);
@@ -217,24 +231,44 @@ impl Gfx {
     }
 }
 
+/// A tile's corner radius as a share of its shorter side.
+pub const TILE_CORNER: f32 = 0.12;
+
+/// The corner radius of a tile or a picture `w`×`h`.
+pub fn tile_radius(w: f32, h: f32) -> f32 {
+    (w.min(h) * TILE_CORNER).max(2.0)
+}
+
 /// Make the corners of an RGBA picture transparent, antialiased: rounded
 /// artwork without a clipping stage at draw time.
 pub fn round_corners(rgba: &mut [u8], w: u32, h: u32, radius: f32) {
-    let r = radius.min(w as f32 / 2.0).min(h as f32 / 2.0);
-    if r <= 0.0 {
+    round_corners_in(rgba, w, [0, 0, w, h], radius);
+}
+
+/// [`round_corners`] for the part `area` (`[x, y, w, h]`) of a picture `w`
+/// wide: a PSP icon fitted into a square keeps its clear bars and rounds its
+/// own rectangle. Only the four corner blocks are visited (it runs in the
+/// frame on the Vita).
+pub fn round_corners_in(rgba: &mut [u8], w: u32, area: [u32; 4], radius: f32) {
+    let [ax, ay, aw, ah] = area;
+    let r = radius.min(aw as f32 / 2.0).min(ah as f32 / 2.0);
+    if r <= 0.0 || aw == 0 || ah == 0 || rgba.len() < ((ay + ah) * w + ax + aw) as usize * 4 {
         return;
     }
-    for y in 0..h {
-        for x in 0..w {
-            let (cx, cy) = (x as f32 + 0.5, y as f32 + 0.5);
-            let dx = (r - cx).max(cx - (w as f32 - r)).max(0.0);
-            let dy = (r - cy).max(cy - (h as f32 - r)).max(0.0);
-            if dx == 0.0 || dy == 0.0 {
-                continue;
+    let block = r.ceil() as u32;
+    for (x0, y0) in [(0, 0), (aw - block, 0), (0, ah - block), (aw - block, ah - block)] {
+        for ly in y0..y0 + block {
+            for lx in x0..x0 + block {
+                let (cx, cy) = (lx as f32 + 0.5, ly as f32 + 0.5);
+                let dx = (r - cx).max(cx - (aw as f32 - r)).max(0.0);
+                let dy = (r - cy).max(cy - (ah as f32 - r)).max(0.0);
+                if dx == 0.0 || dy == 0.0 {
+                    continue;
+                }
+                let keep = coverage(length(dx, dy) - r, 1.0) as u32;
+                let alpha = &mut rgba[(((ay + ly) * w + ax + lx) * 4 + 3) as usize];
+                *alpha = (*alpha as u32 * keep / 255) as u8;
             }
-            let keep = coverage(length(dx, dy) - r, 1.0) as u32;
-            let alpha = &mut rgba[((y * w + x) * 4 + 3) as usize];
-            *alpha = (*alpha as u32 * keep / 255) as u8;
         }
     }
 }
@@ -410,5 +444,26 @@ impl Icon {
                 ring.min(equator).min(meridian.max(r - 7.6))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod corner_tests {
+    use super::*;
+
+    /// The corner pixel turns clear, the middle and the area's edge midpoints
+    /// stay, and pixels outside the area are not touched.
+    #[test]
+    fn round_corners_in_clears_the_area_corners_only() {
+        let (w, h) = (40u32, 30u32);
+        let mut rgba = vec![255u8; (w * h * 4) as usize];
+        let alpha = |rgba: &[u8], x: u32, y: u32| rgba[((y * w + x) * 4 + 3) as usize];
+        round_corners_in(&mut rgba, w, [10, 5, 20, 20], 8.0);
+        assert_eq!(alpha(&rgba, 10, 5), 0);
+        assert_eq!(alpha(&rgba, 29, 24), 0);
+        assert_eq!(alpha(&rgba, 20, 15), 255);
+        assert_eq!(alpha(&rgba, 20, 5), 255);
+        assert_eq!(alpha(&rgba, 0, 0), 255);
+        assert_eq!(alpha(&rgba, 9, 5), 255);
     }
 }
