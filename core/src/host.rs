@@ -358,6 +358,7 @@ pub const SAVED_FILES: &[&str] = &[
     crate::library::settings::STATUS_BAR_FILE,
     crate::library::settings::TEXT_SIZE_FILE,
     crate::library::settings::GAME_INFO_FILE,
+    crate::library::settings::RETRO_VIEW_FILE,
     crate::library::settings::KEYBOARD_FILE,
     crate::library::settings::EMULATORS_FILE,
     crate::library::played::PLAYS_FILE,

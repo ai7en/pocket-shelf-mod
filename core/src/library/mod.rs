@@ -109,6 +109,8 @@ pub struct Library {
     pub orders: SortOrders,
     /// The open search's term; empty when no search is open.
     pub search_term: String,
+    /// The console tabs of retro games stay out of the tab bar (`retro-view.json`).
+    pub hide_consoles: bool,
     /// The names identified titles show ([`Library::set_names`]).
     names: settings::GameNames,
 
@@ -151,6 +153,7 @@ impl Library {
             system: FxHashMap::default(),
             orders,
             search_term: String::new(),
+            hide_consoles: false,
             names: settings::GameNames::Playlist,
             categories: Vec::new(),
             games: Vec::new(),
@@ -511,7 +514,7 @@ impl Library {
         tabs.extend(
             self.categories
                 .iter()
-                .filter(|c| !self.config.hidden.contains(&c.id) && (c.custom || SHOW_EMPTY_CATEGORIES || self.count(&c.id) > 0))
+                .filter(|c| !self.config.hidden.contains(&c.id) && !(self.hide_consoles && c.console) && (c.custom || SHOW_EMPTY_CATEGORIES || self.count(&c.id) > 0))
                 .cloned(),
         );
         tabs

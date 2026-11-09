@@ -350,7 +350,9 @@ fn add_scummvm_games(titles: &mut Vec<Title>, installed: u8) {
 /// The saved list with some parts read again and the rest as they were; a
 /// full scan when there is no saved list.
 fn rescan(parts: Parts) -> Vec<Title> {
-    let Some(mut titles) = load_list() else { return scan() };
+    // With no saved list the parts alone are read: a first start reads the
+    // installed titles first and the playlists and folders after them.
+    let mut titles = load_list().unwrap_or_default();
     titles.retain(|item| !parts.holds(item));
     scan_parts(titles, parts)
 }

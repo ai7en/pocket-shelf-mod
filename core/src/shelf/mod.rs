@@ -329,6 +329,7 @@ impl Shelf {
             pending_free: Vec::new(),
         };
         shelf.library.set_names(shelf.settings.game_info.names);
+        shelf.library.hide_consoles = shelf.settings.retro_view.hide_consoles;
         shelf.tab = shelf.settings.category.clone().unwrap_or_default();
         shelf.refresh();
         shelf
@@ -977,7 +978,11 @@ impl Shelf {
                 return;
             }
             Item::Rescan => {
-                self.open_rescan();
+                // One scan at a time: a scan behind the shelf shows its
+                // progress on this row.
+                if !self.tab_scanning {
+                    self.open_rescan();
+                }
                 return;
             }
             Item::RescanTab => {
@@ -1005,6 +1010,14 @@ impl Shelf {
                 use crate::library::settings::GAME_INFO_FILE;
                 s.game_info.details = !s.game_info.details;
                 host.write(GAME_INFO_FILE, s.game_info.render().as_bytes());
+                return;
+            }
+            Item::RetroConsoles => {
+                use crate::library::settings::RETRO_VIEW_FILE;
+                s.retro_view.hide_consoles = !s.retro_view.hide_consoles;
+                host.write(RETRO_VIEW_FILE, s.retro_view.render().as_bytes());
+                self.library.hide_consoles = self.settings.retro_view.hide_consoles;
+                self.after_change_pub();
                 return;
             }
             Item::Diagnostics => {
@@ -1688,7 +1701,7 @@ impl Shelf {
                 (t.fetch_art, Some(source.into()), None, Right)
             }
             Item::CleanArt => (t.clean_art, None, None, Right),
-            Item::Rescan => (t.rescan, None, None, Right),
+            Item::Rescan => (t.rescan, self.scan_value(), None, Right),
             Item::GameDatabase => (t.game_database, None, None, Right),
             Item::GameNames => {
                 use crate::library::settings::GameNames;
@@ -1719,21 +1732,25 @@ impl Shelf {
                 let name = crate::i18n::LANGUAGES.iter().find(|(l, _)| *l == s.language).map_or("", |(_, n)| n);
                 (t.language, Some(name.into()), None, Both)
             }
+            Item::RetroConsoles => (t.retro_consoles, on_off(!s.retro_view.hide_consoles), None, Both),
             Item::Diagnostics => (t.diagnostics, None, None, Right),
             Item::ConsoleStart => (t.console_start, None, None, Right),
             // While it runs, what it reads and how far it is.
-            Item::RescanTab => {
-                let value = self.tab_scanning.then(|| match self.tab_progress {
-                    Some((done, total, phase)) if total > 0 => crate::i18n::fill(
-                        t.scan_step,
-                        &[("phase", crate::i18n::scan_phase(t, phase)), ("done", &done.min(total).to_string()), ("total", &total.to_string())],
-                    ),
-                    Some((_, _, phase)) => format!("{}...", crate::i18n::scan_phase(t, phase)),
-                    None => "...".to_string(),
-                });
-                (t.rescan_tab, value, None, Right)
-            }
+            Item::RescanTab => (t.rescan_tab, self.scan_value(), None, Right),
         }
+    }
+
+    /// While a scan runs behind the shelf, what it reads and how far it is.
+    fn scan_value(&self) -> Option<String> {
+        let t = self.t();
+        self.tab_scanning.then(|| match self.tab_progress {
+            Some((done, total, phase)) if total > 0 => crate::i18n::fill(
+                t.scan_step,
+                &[("phase", crate::i18n::scan_phase(t, phase)), ("done", &done.min(total).to_string()), ("total", &total.to_string())],
+            ),
+            Some((_, _, phase)) => format!("{}...", crate::i18n::scan_phase(t, phase)),
+            None => "...".to_string(),
+        })
     }
 
     /// The SELECT menu: the main page, or the group opened from it.

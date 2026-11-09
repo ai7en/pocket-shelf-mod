@@ -193,6 +193,30 @@ impl GameInfo {
     }
 }
 
+/// Whether the console tabs of retro games show, a setting of its own
+/// (`retro-view.json`): `{"hide_consoles": false}`. The games stay in the
+/// list, in Last Played, Favorites, search and the tabs the user made.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct RetroView {
+    pub hide_consoles: bool,
+}
+
+pub const RETRO_VIEW_FILE: &str = "retro-view.json";
+
+impl RetroView {
+    pub fn parse(bytes: &[u8]) -> RetroView {
+        let Ok(raw) = crate::library::read_json(bytes) else { return RetroView::default() };
+        RetroView { hide_consoles: raw.get("hide_consoles").and_then(Value::as_bool).unwrap_or(false) }
+    }
+
+    /// Two-space JSON and a newline, as the app's other files.
+    pub fn render(self) -> String {
+        let mut map = Map::new();
+        map.insert("hide_consoles".into(), self.hide_consoles.into());
+        serde_json::to_string_pretty(&Value::Object(map)).expect("json") + "\n"
+    }
+}
+
 keyed!(
     /// The keyboard text is typed with: the Vita's own, or Pocket Shelf's.
     KeyboardKind { System = "system", Own = "pocket-shelf" }
@@ -478,6 +502,9 @@ impl Settings {
         if let Some(bytes) = host.read(GAME_INFO_FILE) {
             settings.game_info = GameInfo::parse(&bytes);
         }
+        if let Some(bytes) = host.read(RETRO_VIEW_FILE) {
+            settings.retro_view = RetroView::parse(&bytes);
+        }
         if let Some(bytes) = host.read(TEXT_SIZE_FILE) {
             settings.text_size = TextSize::parse(&bytes);
         }
@@ -523,6 +550,8 @@ pub struct Settings {
     pub emulators: EmulatorChoice,
     /// Saved in its own file, `game-info.json` (not rendered here).
     pub game_info: GameInfo,
+    /// Saved in its own file, `retro-view.json` (not rendered here).
+    pub retro_view: RetroView,
     /// Saved in its own file, `autostart.txt`, which the console start
     /// plugin reads (not rendered here).
     pub autostart: crate::autostart::AutoStart,
@@ -556,6 +585,7 @@ impl Settings {
             keyboard: KeyboardKind::Own,
             emulators: EmulatorChoice::default(),
             game_info: GameInfo::default(),
+            retro_view: RetroView::default(),
             autostart: crate::autostart::AutoStart::default(),
             folders: Folders::default(),
             cores: CoreChoice::default(),

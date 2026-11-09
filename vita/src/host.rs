@@ -314,8 +314,34 @@ impl VitaHost {
         let sender = self.answer_sender.clone();
         spawn("shelf-scan", move || unsafe {
             let started = now_us();
-            // The saved list when there is one; else a full scan, which
-            // saves it (installed.rs).
+            // The saved list when there is one; else a scan, which saves it
+            // (installed.rs). A first start has no list: the installed
+            // titles are read first and shown, then the playlists and the
+            // folders (thousands of files) are read behind the shelf.
+            let mut later = None;
+            let mut only = only;
+            if !force && only.is_none() && !installed::titles_ready() {
+                let parts = |first: bool| installed::Parts { apps: first, psm: first, psp: first, retro: !first, folders: !first };
+                only = Some(parts(true));
+                later = Some(parts(false));
+            }
+            // Wait for the scan and send its progress.
+            let wait = || loop {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+                let state = installed::scan_state();
+                if state.starts_with("done") {
+                    log_line(&format!("titles: scanned ({state})"));
+                    break;
+                }
+                // `running <done> <total> <phase>`: the scan page's bar.
+                let mut words = state.split(' ');
+                if words.next() == Some("running") {
+                    let done = words.next().and_then(|w| w.parse().ok()).unwrap_or(0);
+                    let total = words.next().and_then(|w| w.parse().ok()).unwrap_or(0);
+                    let phase = ScanPhase::from_key(words.next().unwrap_or(""));
+                    let _ = sender.send(Event::Scan { done, total, phase });
+                }
+            };
             if !force && installed::titles_ready() {
                 log_line("titles: read the saved list");
             } else if !installed::scan_start(only) {
@@ -327,22 +353,7 @@ impl VitaHost {
                     return;
                 }
             } else {
-                loop {
-                    std::thread::sleep(std::time::Duration::from_millis(50));
-                    let state = installed::scan_state();
-                    if state.starts_with("done") {
-                        log_line(&format!("titles: scanned ({state})"));
-                        break;
-                    }
-                    // `running <done> <total> <phase>`: the scan page's bar.
-                    let mut words = state.split(' ');
-                    if words.next() == Some("running") {
-                        let done = words.next().and_then(|w| w.parse().ok()).unwrap_or(0);
-                        let total = words.next().and_then(|w| w.parse().ok()).unwrap_or(0);
-                        let phase = ScanPhase::from_key(words.next().unwrap_or(""));
-                        let _ = sender.send(Event::Scan { done, total, phase });
-                    }
-                }
+                wait();
             }
             // What the game database found for each title, saved by the
             // runs before.
@@ -360,6 +371,17 @@ impl VitaHost {
             let dates = crate::platform::appdb::dates().unwrap_or_default();
             log_line(&format!("dates: {} titles from app.db in {} ms", dates.len(), (now_us() - read) / 1000));
             let _ = sender.send(Event::Dates(dates));
+            // A first start: the playlists and folders, behind the shelf.
+            if let Some(parts) = later {
+                log_line("titles: first start, reading the playlists and folders behind the shelf");
+                if installed::scan_start(Some(parts)) {
+                    wait();
+                    let mut infos = installed::infos();
+                    known.apply(&mut infos);
+                    let titles = shelf_core::library::catalog::load_catalog(&infos);
+                    let _ = sender.send(Event::Titles(titles, ((now_us() - started) / 1000) as u32));
+                }
+            }
             // Titles new since the last start, in the tables on the card.
             crate::platform::gamedb::identify_new(&sender);
             crate::platform::wikidata::match_new(&sender);

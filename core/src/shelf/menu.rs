@@ -55,6 +55,8 @@ pub enum Item {
     Diagnostics,
     /// Open at console start and Return after a game (`autostart.rs`).
     ConsoleStart,
+    /// Show or hide the console tabs of retro games (`retro-view.json`).
+    RetroConsoles,
     /// Read again what fills the open tab (`Shelf::tab_sources`).
     RescanTab,
 }
@@ -72,7 +74,7 @@ pub fn items(page: Page) -> &'static [Item] {
         Page::Status => &[StatusBar, StatusPosition, ShowWifi, ShowBluetooth, ShowBattery, BatteryPercent, Clock],
         Page::Games => &[Categories, Emulator, Rescan, GameDatabase, GameNames, GameDetails, Open(Page::Artwork)],
         Page::Artwork => &[FetchArt, CleanArt],
-        Page::System => &[Confirm, Keyboard, ConsoleStart, UpdateChannel, CheckUpdates, Diagnostics],
+        Page::System => &[Confirm, Keyboard, RetroConsoles, ConsoleStart, UpdateChannel, CheckUpdates, Diagnostics],
     }
 }
 

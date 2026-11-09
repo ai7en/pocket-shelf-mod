@@ -27,7 +27,8 @@ impl Shelf {
         self.drawer.set(1.0, self.now);
     }
 
-    /// Confirm scans; back closes, not while a scan runs.
+    /// Confirm scans; back closes, and a running scan goes on behind the
+    /// shelf (its progress shows in SELECT ▸ Games ▸ Rescan).
     pub(super) fn rescan_input(&mut self, host: &mut dyn Host, confirm: bool, cancel: bool) {
         let Some(rescan) = &mut self.rescan else { return };
         if confirm && !rescan.running {
@@ -35,7 +36,11 @@ impl Shelf {
             rescan.progress = None;
             rescan.note.clear();
             host.scan(true);
-        } else if cancel && !rescan.running {
+        } else if cancel {
+            if rescan.running {
+                self.tab_scanning = true;
+                self.tab_progress = rescan.progress;
+            }
             self.rescan = None;
         }
     }
@@ -44,7 +49,10 @@ impl Shelf {
     pub fn scan_progress(&mut self, done: u32, total: u32, phase: ScanPhase) {
         if let Some(rescan) = &mut self.rescan {
             rescan.progress = Some((done, total, phase));
-        } else if self.tab_scanning {
+        } else {
+            // The scan behind the shelf: a rescan whose panel was closed, or
+            // the playlists and folders a first start reads after the shelf shows.
+            self.tab_scanning = true;
             self.tab_progress = Some((done, total, phase));
         }
     }
@@ -56,6 +64,8 @@ impl Shelf {
             rescan.running = false;
             rescan.progress = None;
             rescan.note = t.scan_failed.to_string();
+        } else {
+            self.folders_read();
         }
     }
 
@@ -85,6 +95,7 @@ impl Shelf {
         let count = fill(t.scrape_count_all, &[("count", &self.library.games().len().to_string())]);
         drawer.row(gfx, t.scan, Some(&count), None, true, Step::Right);
         if running {
+            drawer.hints(gfx, &[(Button::cancel(self.settings.confirm), t.back)]);
             let (done, total, phase) = progress.unwrap_or((0, 0, ScanPhase::Apps));
             let line = fill(t.scan_step, &[("phase", scan_phase(t, phase)), ("done", &done.to_string()), ("total", &total.to_string())]);
             drawer.note(gfx, &line, 0);
