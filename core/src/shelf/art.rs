@@ -259,14 +259,25 @@ impl Art {
             loaded.used = clock;
             // The box fills the part that shows, not the clear bars of a
             // picture fitted into a square.
+            let part = part_of(rect, loaded.shown);
+            let radius = crate::shapes::tile_radius(part.w, part.h);
             if let Some(boxed) = loaded.boxed.filter(|_| icon_box) {
-                gfx.image_full(boxed, part_of(rect, loaded.shown), tint);
+                let texture = gfx.textures.get(boxed);
+                let src = Rect::new(0.0, 0.0, texture.w as f32, texture.h as f32);
+                gfx.image_rounded(boxed, src, part, tint, radius);
             }
-            gfx.image_full(loaded.tex, rect, tint);
+            // The part that shows, with its corners cut; what lies outside
+            // it is clear.
+            let texture = gfx.textures.get(loaded.tex);
+            let (tw, th) = (texture.w as f32, texture.h as f32);
+            let src = Rect::new(loaded.shown[0] * tw, loaded.shown[1] * th, loaded.shown[2] * tw, loaded.shown[3] * th);
+            gfx.image_rounded(loaded.tex, src, part, tint, radius);
             return;
         }
         let tints = *self.tints.get_or_insert_with(|| TINT_ART.map(|(top, bottom)| gfx.gradient_tile(Color::rgb(top), Color::rgb(bottom), 96)));
-        gfx.image_full(tints[game.tint as usize % TINT_COUNT], rect, tint);
+        let texture = gfx.textures.get(tints[game.tint as usize % TINT_COUNT]);
+        let src = Rect::new(0.0, 0.0, texture.w as f32, texture.h as f32);
+        gfx.image_rounded(tints[game.tint as usize % TINT_COUNT], src, rect, tint, crate::shapes::tile_radius(rect.w, rect.h));
         // The current UI's text-4xl on the large tiles, text-xl on the grid,
         // text-xs on the list's: about 0.29 of the side for two letters, a
         // half for one; a step smaller, as the port's text is.

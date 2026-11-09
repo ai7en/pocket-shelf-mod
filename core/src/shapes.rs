@@ -199,6 +199,35 @@ impl Gfx {
         self.symbol(symbol, x + 6.0, y + 6.0, 20.0, Color::rgb(color));
     }
 
+    /// The part `src` of a texture into `dst` with corners of `radius`, cut
+    /// in the geometry: a band of rows a pixel high at each corner, narrowed
+    /// by the circle, and one rectangle between them. It does not depend on
+    /// the texture's alpha, which a picture's own corners (and a backend
+    /// that ignores them) cannot be relied on for.
+    pub fn image_rounded(&mut self, tex: TexId, src: Rect, dst: Rect, tint: Color, radius: f32) {
+        let r = radius.min(dst.w / 2.0).min(dst.h / 2.0);
+        if r < 1.5 || dst.w <= 0.0 || dst.h <= 0.0 {
+            self.image(tex, src, dst, tint);
+            return;
+        }
+        let (kx, ky) = (src.w / dst.w, src.h / dst.h);
+        let part = |dx: f32, dy: f32, w: f32, h: f32| (Rect::new(src.x + dx * kx, src.y + dy * ky, w * kx, h * ky), Rect::new(dst.x + dx, dst.y + dy, w, h));
+        let bands = r.ceil() as u32;
+        let step = r / bands as f32;
+        for i in 0..bands {
+            let top = i as f32 * step;
+            let rise = r - (top + step / 2.0);
+            let inset = r - (r * r - rise * rise).max(0.0).sqrt();
+            let width = dst.w - 2.0 * inset;
+            let (s, d) = part(inset, top, width, step);
+            self.image(tex, s, d, tint);
+            let (s, d) = part(inset, dst.h - top - step, width, step);
+            self.image(tex, s, d, tint);
+        }
+        let (s, d) = part(0.0, r, dst.w, dst.h - 2.0 * r);
+        self.image(tex, s, d, tint);
+    }
+
     /// A vertical gradient texture (8×256, bilinear), stretched by the caller.
     pub fn gradient(&mut self, top: Color, bottom: Color) -> TexId {
         self.gradient_sized(top, bottom, 256)
@@ -481,5 +510,33 @@ mod corner_tests {
         assert_eq!(alpha(63, 63), 0);
         assert_eq!(alpha(32, 0), 255);
         assert_eq!(alpha(32, 32), 255);
+    }
+
+    /// The rounded image is cut in the geometry: the rows at a corner start
+    /// inside the rectangle's edge, the rows between the corners span it, and
+    /// the source keeps the texels' scale.
+    #[test]
+    fn image_rounded_narrows_the_corner_rows() {
+        let mut gfx = Gfx::new();
+        let tex = gfx.add_texture(64, 64, Format::Rgba8, vec![255; 64 * 64 * 4], true);
+        let (src, dst) = (Rect::new(0.0, 0.0, 64.0, 64.0), Rect::new(100.0, 50.0, 128.0, 128.0));
+        gfx.image_rounded(tex, src, dst, Color::rgb(0xffffff), 20.0);
+        let rects: Vec<(Rect, Rect)> = gfx
+            .cmds
+            .iter()
+            .filter_map(|c| if let crate::gfx::Cmd::Image { src, dst, .. } = *c { Some((src, dst)) } else { None })
+            .collect();
+        assert_eq!(rects.len(), 2 * 20 + 1);
+        let (_, first) = rects[0];
+        assert!(first.x > 100.0 + 10.0 && first.y == 50.0, "{first:?}");
+        let (_, middle) = *rects.last().unwrap();
+        assert_eq!((middle.x, middle.y, middle.w, middle.h), (100.0, 70.0, 128.0, 88.0));
+        // Every piece keeps the 2:1 scale from texels to pixels.
+        for (s, d) in &rects {
+            assert!((d.w / s.w - 2.0).abs() < 1e-3 && (d.h / s.h - 2.0).abs() < 1e-3);
+        }
+        // The pieces' areas add up to the rectangle less four corner cut-outs.
+        let area: f32 = rects.iter().map(|(_, d)| d.w * d.h).sum();
+        assert!(area < 128.0 * 128.0 && area > 128.0 * 128.0 * 0.95, "{area}");
     }
 }
