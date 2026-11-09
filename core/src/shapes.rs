@@ -252,7 +252,7 @@ pub fn round_corners(rgba: &mut [u8], w: u32, h: u32, radius: f32) {
 pub fn round_corners_in(rgba: &mut [u8], w: u32, area: [u32; 4], radius: f32) {
     let [ax, ay, aw, ah] = area;
     let r = radius.min(aw as f32 / 2.0).min(ah as f32 / 2.0);
-    if r <= 0.0 || aw == 0 || ah == 0 || rgba.len() < ((ay + ah) * w + ax + aw) as usize * 4 {
+    if r <= 0.0 || aw == 0 || ah == 0 || rgba.len() < ((ay + ah - 1) * w + ax + aw) as usize * 4 {
         return;
     }
     let block = r.ceil() as u32;
@@ -465,5 +465,21 @@ mod corner_tests {
         assert_eq!(alpha(&rgba, 20, 5), 255);
         assert_eq!(alpha(&rgba, 0, 0), 255);
         assert_eq!(alpha(&rgba, 9, 5), 255);
+    }
+
+    /// An area that is the whole picture, flush with its last row and column
+    /// (a plate, a square box art), rounds too.
+    #[test]
+    fn round_corners_rounds_a_whole_picture() {
+        let (w, h) = (64u32, 64u32);
+        let mut rgba = vec![255u8; (w * h * 4) as usize];
+        round_corners(&mut rgba, w, h, 8.0);
+        let alpha = |x: u32, y: u32| rgba[((y * w + x) * 4 + 3) as usize];
+        assert_eq!(alpha(0, 0), 0);
+        assert_eq!(alpha(63, 0), 0);
+        assert_eq!(alpha(0, 63), 0);
+        assert_eq!(alpha(63, 63), 0);
+        assert_eq!(alpha(32, 0), 255);
+        assert_eq!(alpha(32, 32), 255);
     }
 }

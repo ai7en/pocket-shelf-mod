@@ -203,7 +203,7 @@ impl Art {
     /// art just used) to the cache under `key`, so the tile shows it without
     /// reading back the file being written.
     pub fn insert(&mut self, gfx: &mut Gfx, key: PictureKey, tex: TexId, accent: Option<u32>, shown: [f32; 4]) {
-        let boxed = box_colors(accent).map(|(top, bottom)| gfx.gradient_sized(top, bottom, 32));
+        let boxed = box_colors(accent).map(|(top, bottom)| gfx.gradient_tile(top, bottom, 64));
         self.requested.remove(&key);
         let texture = &gfx.textures.list[tex.0 as usize];
         let bytes = rgba_bytes(texture.w, texture.h) + if boxed.is_some() { BOX_BYTES } else { 0 };
