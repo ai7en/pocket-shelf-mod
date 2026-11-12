@@ -2116,7 +2116,30 @@ mod tests {
         // The shelf's own title has none of the three.
         let own = TitleInfo { id: "RETROSHLF".into(), title: "Retro Shelf".into(), platform: "vita".into(), ..Default::default() };
         let own = load_catalog(&[own]);
-        assert!(!editor::editor_rows(&own[0], false).contains(&editor::Row::Delete));
+        assert!(!editor::editor_rows(&own[0], false, false).contains(&editor::Row::Delete));
+    }
+
+    /// The editor shows the size of a game's `data` and `rePatch` folders
+    /// once the host has walked them, and only for a folder that exists.
+    #[test]
+    fn the_editor_shows_the_size_of_the_data_folders() {
+        let (mut shelf, mut host) = setup(true, PluginState::On);
+        shelf.apply_search("PCSA00069");
+        press(&mut shelf, &mut host, TRIANGLE);
+        assert!(!shelf.editor_row_list().contains(&editor::Row::Folders));
+        let none = crate::host::FolderSizes::default();
+        shelf.folders_known("PCSA00069", none);
+        assert!(!shelf.editor_row_list().contains(&editor::Row::Folders));
+        let sizes = crate::host::FolderSizes { data: Some(3 * 1024 * 1024 * 1024 / 2), repatch: None };
+        shelf.folders_known("PCSA00069", sizes);
+        let rows = shelf.editor_row_list();
+        assert_eq!(rows[rows.len() - 4..], [editor::Row::Folders, editor::Row::Shrink, editor::Row::Delete, editor::Row::DeleteWithData]);
+        assert_eq!(editor::folders_value_for_test(&sizes), "data 1.5 GB");
+        let both = crate::host::FolderSizes { data: Some(2 * 1024 * 1024), repatch: Some(512 * 1024) };
+        assert_eq!(editor::folders_value_for_test(&both), "data 2.0 MB \u{b7} rePatch 0.5 MB");
+        // An answer for another title changes nothing.
+        shelf.folders_known("OTHER0001", none);
+        assert_eq!(shelf.editor.as_ref().unwrap().folders, Some(sizes));
     }
 
     #[test]

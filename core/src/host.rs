@@ -181,6 +181,16 @@ pub struct CoreList {
     pub cores: Vec<String>,
 }
 
+/// The bytes in a game's folders beside `ux0:app`, from [`Host::folder_sizes`];
+/// `None` where the folder does not exist.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct FolderSizes {
+    /// `ux0:data/<id>`.
+    pub data: Option<u64>,
+    /// `ux0:rePatch/<id>`.
+    pub repatch: Option<u64>,
+}
+
 /// A folder's entry, as [`Host::list_folder`] answers it.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct FolderEntry {
@@ -286,6 +296,8 @@ pub enum Event {
     Folder(String, Option<Vec<FolderEntry>>),
     /// A title's cores in each app that can start it ([`Host::cores`]).
     Cores(String, Vec<CoreList>),
+    /// [`Host::folder_sizes`] finished for this title.
+    Folders(String, FolderSizes),
     /// [`Host::game_work`] finished: the bytes freed, or the reason it
     /// failed.
     GameWork(String, GameWork, Result<u64, String>),
@@ -535,6 +547,13 @@ pub trait Host {
     /// files); answered with [`Event::GameWork`]. False when this host
     /// cannot or is busy.
     fn game_work(&mut self, _id: &str, _work: GameWork) -> bool {
+        false
+    }
+
+    /// The size of `ux0:data/<id>` and `ux0:rePatch/<id>` for one installed
+    /// game, on a worker thread (a folder holds thousands of files);
+    /// answered with [`Event::Folders`]. False when this host cannot.
+    fn folder_sizes(&mut self, _id: &str) -> bool {
         false
     }
 

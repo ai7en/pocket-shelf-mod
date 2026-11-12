@@ -600,6 +600,17 @@ impl Host for VitaHost {
         true
     }
 
+    fn folder_sizes(&mut self, id: &str) -> bool {
+        let (id, sender) = (id.to_string(), self.answer_sender.clone());
+        spawn("shelf-folders", move || {
+            let started = now_us();
+            let sizes = crate::platform::gamework::folder_sizes(&id);
+            log_line(&format!("folders {id}: {sizes:?} in {} ms", (now_us() - started) / 1000));
+            let _ = sender.send(Event::Folders(id, sizes));
+        });
+        true
+    }
+
     fn game_work(&mut self, id: &str, work: shelf_core::host::GameWork) -> bool {
         if !crate::platform::gamework::begin() {
             return false;

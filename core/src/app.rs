@@ -191,6 +191,11 @@ impl App {
                         shelf.cores_listed(&id, lists);
                     }
                 }
+                Event::Folders(id, sizes) => {
+                    if let Some(shelf) = &mut self.shelf {
+                        shelf.folders_known(&id, sizes);
+                    }
+                }
                 Event::GameWork(id, work, result) => {
                     if let Some(shelf) = &mut self.shelf {
                         shelf.game_work_done(host, &id, work, result);

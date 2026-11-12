@@ -888,6 +888,13 @@ impl Host for FakeHost {
         true
     }
 
+    fn folder_sizes(&mut self, id: &str) -> bool {
+        // What the renders show: a game with both folders.
+        let sizes = shelf_core::host::FolderSizes { data: Some(1_288_490_189), repatch: Some(356_515_840) };
+        self.later.push(Event::Folders(id.to_string(), sizes));
+        true
+    }
+
     fn game_work(&mut self, id: &str, work: shelf_core::host::GameWork) -> bool {
         // What the renders show: a shrink frees
         // 212 MB, a delete works.

@@ -251,7 +251,8 @@ taiHEN plugins (Console start), and NEON results (below).
   closing it does not bring Pocket Shelf back. Its log of each console start
   is `boot-plugin.log`; Console start copies its last 40 lines into the
   app's log.
-- **SELECT ▸ System ▸ Console start** changes the tai config only after a second
+- **The Console start row is not listed in SELECT ▸ System** (`menu.rs`, `Page::System`): the plugin is unconfirmed on hardware, and a hang followed by memory clearing was reported with it. `Item::ConsoleStart` and its screen stay; list the item again once a boot log shows the plugin is safe.
+- **SELECT ▸ System ▸ Console start** (when listed) changes the tai config only after a second
   press, adding one line first under `*main` (or a `*main` section) in the
   file's own line endings; the change is checked to touch no other line,
   the old file is kept as `config.txt.pocketshelf.bak`, the new one goes

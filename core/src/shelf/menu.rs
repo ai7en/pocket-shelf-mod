@@ -53,7 +53,9 @@ pub enum Item {
     /// The system's keyboard or Pocket Shelf's.
     Keyboard,
     Diagnostics,
-    /// Open at console start and Return after a game (`autostart.rs`).
+    /// Open at console start and Return after a game (`autostart.rs`). Not
+    /// listed in any page: the console start plugin is unconfirmed on
+    /// hardware (`docs/NOTES.md`, "Plugins"); the screen stays for when it is.
     ConsoleStart,
     /// Show or hide the console tabs of retro games (`retro-view.json`).
     RetroConsoles,
@@ -74,7 +76,7 @@ pub fn items(page: Page) -> &'static [Item] {
         Page::Status => &[StatusBar, StatusPosition, ShowWifi, ShowBluetooth, ShowBattery, BatteryPercent, Clock],
         Page::Games => &[Categories, Emulator, Rescan, GameDatabase, GameNames, GameDetails, Open(Page::Artwork)],
         Page::Artwork => &[FetchArt, CleanArt],
-        Page::System => &[Confirm, Keyboard, RetroConsoles, ConsoleStart, UpdateChannel, CheckUpdates, Diagnostics],
+        Page::System => &[Confirm, Keyboard, RetroConsoles, UpdateChannel, CheckUpdates, Diagnostics],
     }
 }
 

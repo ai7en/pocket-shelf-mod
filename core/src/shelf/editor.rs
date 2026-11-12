@@ -33,6 +33,9 @@ pub(super) enum Row {
     Backdrop,
     FindArt,
     Reset,
+    /// The size of the game's folders in `data` and `rePatch`; only when
+    /// the host found one. Shows a value and does nothing.
+    Folders,
     /// Remove the manual and the files a patch replaces (Vita games).
     Shrink,
     /// Uninstall the game.
@@ -43,7 +46,7 @@ pub(super) enum Row {
 
 /// The rows for a title: Open with only when several apps can start it, Core
 /// only when the app that opens it has more than one core for it.
-pub(super) fn editor_rows(game: &crate::library::catalog::Game, cores: bool) -> Vec<Row> {
+pub(super) fn editor_rows(game: &crate::library::catalog::Game, cores: bool, folders: bool) -> Vec<Row> {
     use Row::*;
     let mut rows = vec![Favorite, Category, OpenWith, Core, Title, BoxArt, Backdrop, FindArt, Reset];
     if !game.opens.several() {
@@ -54,6 +57,9 @@ pub(super) fn editor_rows(game: &crate::library::catalog::Game, cores: bool) -> 
     }
     // Only an installed Vita game (and homebrew), never this app itself.
     if game.platform == crate::library::categories::Platform::Vita && *game.id != *crate::autostart::SELF_ID {
+        if folders {
+            rows.push(Folders);
+        }
         rows.extend([Shrink, Delete, DeleteWithData]);
     }
     rows
@@ -67,6 +73,24 @@ fn format_size(bytes: u64) -> String {
     } else {
         format!("{mb:.1} MB")
     }
+}
+
+/// The Folders row's value: `data 1.2 GB · rePatch 340.0 MB`, each part only
+/// when that folder exists. The folders keep their names on disk.
+fn folders_value(sizes: &crate::host::FolderSizes) -> String {
+    let mut parts = Vec::new();
+    if let Some(bytes) = sizes.data {
+        parts.push(format!("data {}", format_size(bytes)));
+    }
+    if let Some(bytes) = sizes.repatch {
+        parts.push(format!("rePatch {}", format_size(bytes)));
+    }
+    parts.join(" \u{b7} ")
+}
+
+#[cfg(test)]
+pub(super) fn folders_value_for_test(sizes: &crate::host::FolderSizes) -> String {
+    folders_value(sizes)
 }
 
 /// A core as the Core row names it: RetroArch's without `_libretro.self`.
@@ -99,6 +123,9 @@ pub struct Editor {
     /// The cores each app can start the title with, from the host (empty
     /// until it answers, and for a title no core app opens).
     pub cores: Vec<crate::host::CoreList>,
+    /// The sizes of the game's folders in `data` and `rePatch`, from the
+    /// host (`None` until it answers, and where the host cannot).
+    pub folders: Option<crate::host::FolderSizes>,
     /// The Shrink or Delete row a first press asked about.
     pub(super) armed: Option<Row>,
     /// A shrink or delete runs on the host.
@@ -213,7 +240,11 @@ impl Shelf {
         if game.opens.retroarch || game.opens.emu4vita {
             host.cores(&id);
         }
-        self.editor = Some(Editor { id, row: 0, note: String::new(), cores: Vec::new(), armed: None, busy: false });
+        // The folders' sizes are walked off the frame too.
+        if game.platform == crate::library::categories::Platform::Vita && *game.id != *crate::autostart::SELF_ID {
+            host.folder_sizes(&id);
+        }
+        self.editor = Some(Editor { id, row: 0, note: String::new(), cores: Vec::new(), folders: None, armed: None, busy: false });
         self.drawer = panel::slide();
         self.drawer.set(1.0, self.now);
     }
@@ -225,7 +256,8 @@ impl Shelf {
     /// The edited title's rows; none when no title is edited.
     pub(super) fn editor_row_list(&self) -> Vec<Row> {
         let cores = self.editor_cores().is_some_and(|list| list.cores.len() > 1);
-        self.editor_game().map(|game| editor_rows(&game, cores)).unwrap_or_default()
+        let folders = self.editor.as_ref().and_then(|e| e.folders).is_some_and(|f| f.data.is_some() || f.repatch.is_some());
+        self.editor_game().map(|game| editor_rows(&game, cores, folders)).unwrap_or_default()
     }
 
     /// The cores of the app that starts the edited title.
@@ -240,6 +272,13 @@ impl Shelf {
     pub fn cores_listed(&mut self, id: &str, lists: Vec<crate::host::CoreList>) {
         if let Some(editor) = self.editor.as_mut().filter(|e| e.id == id) {
             editor.cores = lists;
+        }
+    }
+
+    /// The host's answer for the size of a title's folders.
+    pub fn folders_known(&mut self, id: &str, sizes: crate::host::FolderSizes) {
+        if let Some(editor) = self.editor.as_mut().filter(|e| e.id == id) {
+            editor.folders = Some(sizes);
         }
     }
 
@@ -310,6 +349,7 @@ impl Shelf {
                 Row::Backdrop => self.open_picker(host, true),
                 Row::FindArt => self.start_online(host),
                 Row::Reset => self.reset_game(host),
+                Row::Folders => {}
                 Row::Shrink | Row::Delete | Row::DeleteWithData => self.game_work_press(host, row),
             }
         } else if cancel {
@@ -507,6 +547,7 @@ impl Shelf {
             },
             None => String::new(),
         };
+        let folders = self.editor.as_ref().and_then(|e| e.folders).unwrap_or_default();
         let rows: Vec<(&str, String, Step)> = self
             .editor_row_list()
             .into_iter()
@@ -520,6 +561,7 @@ impl Shelf {
                 Row::Backdrop => (t.backdrop, fit(gfx, &backdrop), Step::Right),
                 Row::FindArt => (t.find_art, scraper.to_string(), Step::Both),
                 Row::Reset => (t.reset, String::new(), Step::None),
+                Row::Folders => (t.game_folders, folders_value(&folders), Step::None),
                 Row::Shrink => (t.shrink, String::new(), Step::None),
                 Row::Delete => (t.delete_game, String::new(), Step::None),
                 Row::DeleteWithData => (t.delete_game_data, String::new(), Step::None),

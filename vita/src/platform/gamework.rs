@@ -67,6 +67,22 @@ pub fn run(id: &str, work: GameWork) -> Result<u64, String> {
     }
 }
 
+/// The bytes in `ux0:data/<id>` and `ux0:rePatch/<id>`, `None` for a folder
+/// that does not exist. Walks every file: worker thread only.
+pub fn folder_sizes(id: &str) -> shelf_core::host::FolderSizes {
+    if !valid_id(id) {
+        return Default::default();
+    }
+    let size = |root: &str| {
+        let folder = format!("{root}/{id}");
+        fs::metadata(&folder).ok()?;
+        let mut found = Vec::new();
+        files(&folder, "", &mut found);
+        Some(found.iter().map(|(_, bytes)| bytes).sum::<u64>())
+    };
+    shelf_core::host::FolderSizes { data: size("ux0:data"), repatch: size("ux0:rePatch") }
+}
+
 fn uninstall(id: &str) -> Result<(), String> {
     let name = CString::new(id).map_err(|_| String::from("title id"))?;
     unsafe {
