@@ -790,6 +790,47 @@ fn save_list(titles: &[Title]) {
     }
 }
 
+/// The file the scan leaves beside the title list for the user: what was
+/// installed, to reinstall from after a card is formatted or loses files.
+const INSTALLED_FILE: &str = "installed.txt";
+
+/// Write `installed.txt` in the data folder: one line per installed Vita app,
+/// PSM, PSP and PS1 title, `id<TAB>platform<TAB>version<TAB>name`. RetroArch
+/// games are left out (their files are the backup). The version is the
+/// `APP_VER` of a Vita app's `sce_sys/param.sfo`, read here on the scan
+/// thread; "" when it has none.
+#[cfg(feature = "data-fs")]
+fn export_installed(titles: &[Title]) {
+    let mut lines: Vec<String> = titles
+        .iter()
+        .filter(|item| item.retro.is_none())
+        .map(|item| {
+            let version = if item.platform == "vita" {
+                let root = if is_system(&item.title_id) { SYSTEM_ROOT } else { APP_ROOT };
+                fs::read(format!("{root}/{}/sce_sys/param.sfo", item.title_id))
+                    .ok()
+                    .and_then(|sfo| sfo_string(&sfo, "APP_VER"))
+                    .unwrap_or_default()
+            } else {
+                String::new()
+            };
+            format!("{}\t{}\t{}\t{}", item.title_id, item.platform, version, item.title)
+        })
+        .collect();
+    lines.sort();
+    let mut text = format!("# Retro Shelf: installed titles ({}). id, platform, version, name\n", lines.len());
+    for line in lines {
+        text.push_str(&line);
+        text.push('\n');
+    }
+    if let Err(error) = fs::write(format!("{}/{INSTALLED_FILE}", crate::platform::data_dir()), text) {
+        crate::platform::vita_log(format_args!("[installed] {INSTALLED_FILE} not saved: {error}"));
+    }
+}
+
+#[cfg(not(feature = "data-fs"))]
+fn export_installed(_titles: &[Title]) {}
+
 #[cfg(not(feature = "data-fs"))]
 fn load_list() -> Option<Vec<Title>> {
     None
@@ -925,6 +966,7 @@ pub fn scan_start(only: Option<Parts>) -> bool {
                 _ => scan(),
             };
             save_list(&found);
+            export_installed(&found);
             let ms = ((unsafe { vitasdk_sys::sceKernelGetProcessTimeWide() } - started) / 1000) as u32;
             if let Ok(mut job) = SCAN_JOB.lock() {
                 *job = ScanJob::Finished(found, ms);
