@@ -13,7 +13,7 @@ pub mod menu;
 pub mod navigation;
 pub mod panel;
 mod database;
-mod restore;
+pub mod restore;
 mod storage;
 mod tools;
 mod vpk;

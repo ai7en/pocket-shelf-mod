@@ -81,7 +81,7 @@ impl Shelf {
     /// Add what the last scan found to the record. Called after each title list.
     pub fn update_ledger(&mut self, host: &mut dyn Host) {
         let ledger = self.ledger.get_or_insert_with(|| host.read(LEDGER_FILE).map(|bytes| parse(&String::from_utf8_lossy(&bytes))).unwrap_or_default());
-        let installed = self.library.games().iter().filter(|game| game.platform == Platform::Vita && !game.adrenaline).map(|game| (&*game.id, game.title.as_str()));
+        let installed = self.library.games().iter().filter(|game| game.platform == Platform::Vita && !game.adrenaline).map(|game| (&*game.id, &*game.title));
         if merge(ledger, installed) {
             host.write(LEDGER_FILE, render(ledger).as_bytes());
         }
