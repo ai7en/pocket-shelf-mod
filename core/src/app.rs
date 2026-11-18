@@ -204,6 +204,11 @@ impl App {
                         shelf.vpk_installed(host, &path, result);
                     }
                 }
+                Event::VpkDeleted(path, ok) => {
+                    if let Some(shelf) = &mut self.shelf {
+                        shelf.vpk_deleted(&path, ok);
+                    }
+                }
                 Event::StorageChecked(found) => {
                     if let Some(shelf) = &mut self.shelf {
                         shelf.storage_checked(found);

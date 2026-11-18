@@ -900,7 +900,7 @@ impl Host for FakeHost {
         let mb = 1024 * 1024;
         let found = vec![
             VpkInfo { path: "ux0:install/games/Crimsonland.vpk".into(), file: "Crimsonland.vpk".into(), size: 180 * mb, modified: 1_763_000_000, title: "Crimsonland".into(), title_id: "PCSB00581".into(), version: "01.00".into(), ..Default::default() },
-            VpkInfo { path: "ux0:install/VitaShell.vpk".into(), file: "VitaShell.vpk".into(), size: 2 * mb, modified: 1_762_000_000, title: "VitaShell".into(), title_id: "VITASHELL".into(), version: "02.02".into(), ..Default::default() },
+            VpkInfo { path: "ux0:install/VitaShell.vpk".into(), file: "VitaShell.vpk".into(), size: 2 * mb, modified: 1_762_000_000, title: "VitaShell".into(), title_id: "VITASHELL".into(), version: "02.02".into(), installed: Some("02.01".into()), ..Default::default() },
             VpkInfo { path: "ux0:install/broken.vpk".into(), file: "broken.vpk".into(), size: mb, problem: "no eboot.bin".into(), ..Default::default() },
         ];
         self.later.push(Event::Vpks(found));
@@ -909,6 +909,11 @@ impl Host for FakeHost {
 
     fn vpk_install(&mut self, path: &str) -> bool {
         self.later.push(Event::VpkInstalled(path.to_string(), Ok("PCSB00581".into())));
+        true
+    }
+
+    fn vpk_delete(&mut self, path: &str) -> bool {
+        self.later.push(Event::VpkDeleted(path.to_string(), true));
         true
     }
 

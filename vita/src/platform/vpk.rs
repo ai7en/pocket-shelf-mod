@@ -136,6 +136,13 @@ fn inspect(path: &str, icons: &str) -> VpkInfo {
     if info.title_id == SELF_TITLE_ID {
         info.problem = String::from("this app");
     }
+    if valid_id(&info.title_id) {
+        let folder = format!("ux0:app/{}", info.title_id);
+        if fs::metadata(&folder).is_ok() {
+            let version = fs::read(format!("{folder}/sce_sys/param.sfo")).ok().and_then(|sfo| sfo_string(&sfo, "APP_VER")).unwrap_or_default();
+            info.installed = Some(version);
+        }
+    }
     if let Some(png) = small(&mut file, &list, "sce_sys/icon0.png") {
         let target = format!("{icons}/{:08x}.png", !crc32_update(!0, path.as_bytes()));
         if fs::write(&target, png).is_ok() {
@@ -211,6 +218,12 @@ fn write_entry(file: &mut fs::File, entry: &Entry, out_path: &str, done: &mut u6
 }
 
 /// Install the package at `path`: the title id on success, else why not.
+/// Delete one package file; only a `.vpk` below the install folder.
+pub fn delete(path: &str) -> bool {
+    let ok = path.starts_with("ux0:install/") && path.to_ascii_lowercase().ends_with(".vpk") && !path.contains("..");
+    ok && fs::remove_file(path).is_ok()
+}
+
 pub fn install(path: &str) -> Result<String, String> {
     set(VpkProgress::Unpacking(0, 0));
     let result = install_inner(path);

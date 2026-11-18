@@ -236,6 +236,8 @@ pub struct VpkInfo {
     pub title: String,
     pub title_id: String,
     pub version: String,
+    /// The version of the same title id that is installed (empty when it has none); None when it is not installed.
+    pub installed: Option<String>,
     /// The package's `icon0.png`, saved as a file the host can decode.
     pub icon: Option<String>,
     /// Why the package cannot be installed ("" when it can).
@@ -363,6 +365,8 @@ pub enum Event {
     Vpks(Vec<VpkInfo>),
     /// [`Host::vpk_install`] finished: the path, and the title id or why not.
     VpkInstalled(String, Result<String, String>),
+    /// A package file was deleted from `ux0:install`: its path and whether it worked.
+    VpkDeleted(String, bool),
     /// [`Host::storage_check`] finished.
     StorageChecked(Vec<Leftover>),
     /// [`Host::storage_clean`] finished: folders removed, folders that stayed.
@@ -642,6 +646,12 @@ pub trait Host {
     /// Install one of those packages on a worker thread; answered with
     /// [`Event::VpkInstalled`].
     fn vpk_install(&mut self, _path: &str) -> bool {
+        false
+    }
+
+    /// Delete a package from the install folder on a worker thread; answered with
+    /// [`Event::VpkDeleted`]. False when this host cannot.
+    fn vpk_delete(&mut self, _path: &str) -> bool {
         false
     }
 

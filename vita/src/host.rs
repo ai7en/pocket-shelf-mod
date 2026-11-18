@@ -642,6 +642,14 @@ impl Host for VitaHost {
         })
     }
 
+    fn vpk_delete(&mut self, path: &str) -> bool {
+        let path = path.to_string();
+        self.storage_job("vpk delete", move |sender| {
+            let ok = crate::platform::vpk::delete(&path);
+            let _ = sender.send(Event::VpkDeleted(path, ok));
+        })
+    }
+
     fn vpk_progress(&mut self) -> shelf_core::host::VpkProgress {
         crate::platform::vpk::progress()
     }

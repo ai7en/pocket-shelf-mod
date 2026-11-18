@@ -72,6 +72,8 @@ pub struct HeaderInput<'a> {
     pub status: &'a Status,
     /// The card's free space and what is missing, shown before the status items; empty hides it.
     pub summary: &'a str,
+    /// Draw the summary in the low-space color.
+    pub summary_low: bool,
     pub tabs: &'a [Category],
     pub current: &'a str,
     pub now: u64,
@@ -164,7 +166,7 @@ impl Header {
 
         if !items.is_empty() {
             let x = if left { BAR_SIDE } else { W - BAR_SIDE - items_w };
-            draw_parts(gfx, theme, input.settings, input.status, &items, x, BAR_H / 2.0);
+            draw_parts(gfx, theme, input.settings, input.status, input.summary_low, &items, x, BAR_H / 2.0);
         }
     }
 
@@ -241,7 +243,7 @@ fn parts_width(parts: &[(Part, f32)]) -> f32 {
 }
 
 /// Draw the items from `x`, centered on `cy`.
-fn draw_parts(gfx: &mut Gfx, theme: &Theme, settings: &Settings, status: &Status, parts: &[(Part, f32)], mut x: f32, cy: f32) {
+fn draw_parts(gfx: &mut Gfx, theme: &Theme, settings: &Settings, status: &Status, summary_low: bool, parts: &[(Part, f32)], mut x: f32, cy: f32) {
     for (part, width) in parts {
         match part {
             Part::Wifi(level) => {
@@ -252,7 +254,7 @@ fn draw_parts(gfx: &mut Gfx, theme: &Theme, settings: &Settings, status: &Status
             Part::Battery(percent) => battery(gfx, theme, settings.battery_percent, *percent, status.charging, x, cy - 12.0),
             Part::Summary(text) => {
                 let baseline = (cy - gfx.line_height(Role::BodyBold) / 2.0 + gfx.ascent(Role::BodyBold)).round();
-                gfx.text(Role::BodyBold, x, baseline, theme.text, text);
+                gfx.text(Role::BodyBold, x, baseline, if summary_low { LOW_BATTERY } else { theme.text }, text);
             }
             Part::Clock(clock) => {
                 let baseline = (cy - gfx.line_height(Role::BodyBold) / 2.0 + gfx.ascent(Role::BodyBold)).round();

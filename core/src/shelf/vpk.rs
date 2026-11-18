@@ -46,6 +46,8 @@ pub struct Vpks {
     pub installing: Option<String>,
     /// The package a first press asked to confirm.
     pub armed: Option<String>,
+    /// The package a first press of delete asked to confirm.
+    pub armed_delete: Option<String>,
     pub note: String,
     /// The highlighted package's icon, and its texture once decoded.
     pub preview: Option<(PictureKey, Option<(TexId, Option<u32>, [f32; 4])>)>,
@@ -90,7 +92,7 @@ impl Shelf {
     pub(super) fn open_vpks(&mut self, host: &mut dyn Host) {
         let scanning = host.vpk_scan();
         let note = if scanning { self.t().install_looking.to_string() } else { self.t().storage_failed.to_string() };
-        self.vpks = Some(Vpks { list: Vec::new(), sort: VpkSort::Name, row: 0, scanning, installing: None, armed: None, note, preview: None });
+        self.vpks = Some(Vpks { list: Vec::new(), sort: VpkSort::Name, row: 0, scanning, installing: None, armed: None, armed_delete: None, note, preview: None });
         self.drawer = panel::slide();
         self.drawer.set(1.0, self.now);
     }
@@ -175,6 +177,7 @@ impl Shelf {
         }
         if panel.row != before {
             panel.armed = None;
+            panel.armed_delete = None;
             if panel.installing.is_none() {
                 panel.note.clear();
             }
@@ -201,8 +204,12 @@ impl Shelf {
         }
         let name = shown_name(&info).to_string();
         if panel.armed.as_deref() != Some(info.path.as_str()) {
-            panel.armed = Some(info.path);
-            panel.note = fill(t.install_confirm, &[("name", &name)]);
+            panel.armed = Some(info.path.clone());
+            panel.armed_delete = None;
+            panel.note = match &info.installed {
+                Some(installed) => fill(t.install_confirm_over, &[("name", &name), ("installed", installed), ("version", &info.version)]),
+                None => fill(t.install_confirm, &[("name", &name)]),
+            };
             return;
         }
         panel.armed = None;
@@ -212,6 +219,40 @@ impl Shelf {
         } else {
             panel.note = fill(t.failed, &[("reason", "unavailable")]);
         }
+    }
+
+    /// Triangle: delete the highlighted package file after a second press.
+    pub(super) fn vpks_delete(&mut self, host: &mut dyn Host) {
+        let t = self.t();
+        let Some(panel) = &mut self.vpks else { return };
+        if panel.installing.is_some() || panel.scanning {
+            return;
+        }
+        let Some(info) = panel.list.get(panel.row).cloned() else { return };
+        if panel.armed_delete.as_deref() != Some(info.path.as_str()) {
+            panel.armed = None;
+            panel.armed_delete = Some(info.path.clone());
+            panel.note = fill(t.install_delete_confirm, &[("name", shown_name(&info))]);
+            return;
+        }
+        panel.armed_delete = None;
+        if !host.vpk_delete(&info.path) {
+            panel.note = fill(t.failed, &[("reason", "unavailable")]);
+        }
+    }
+
+    /// The host deleted a package, or could not.
+    pub fn vpk_deleted(&mut self, path: &str, ok: bool) {
+        let t = self.t();
+        let Some(panel) = &mut self.vpks else { return };
+        if !ok {
+            panel.note = fill(t.failed, &[("reason", path)]);
+            return;
+        }
+        let name = panel.list.iter().find(|info| info.path == path).map(|info| shown_name(info).to_string()).unwrap_or_default();
+        panel.list.retain(|info| info.path != path);
+        panel.row = panel.row.min(panel.list.len().saturating_sub(1));
+        panel.note = if panel.list.is_empty() { t.install_none.to_string() } else { fill(t.install_deleted, &[("name", &name)]) };
     }
 
     /// The install finished. The titles are read again either way: a package
@@ -258,6 +299,9 @@ impl Shelf {
             if !info.problem.is_empty() {
                 lines.push(fill(t.failed, &[("reason", &info.problem)]));
             }
+            if let Some(installed) = &info.installed {
+                lines.push(fill(t.install_present, &[("installed", installed)]));
+            }
         }
         if !panel.note.is_empty() {
             lines.push(panel.note.clone());
@@ -268,7 +312,7 @@ impl Shelf {
             VpkSort::Date => t.install_by_date,
             VpkSort::Size => t.install_by_size,
         };
-        drawer.hints(gfx, &[(Button::confirm(self.settings.confirm), t.choose), (Button::Face(Symbol::Square), sort), (Button::cancel(self.settings.confirm), t.back)]);
+        drawer.hints(gfx, &[(Button::confirm(self.settings.confirm), t.choose), (Button::Face(Symbol::Square), sort), (Button::Face(Symbol::Triangle), t.install_delete), (Button::cancel(self.settings.confirm), t.back)]);
     }
 }
 

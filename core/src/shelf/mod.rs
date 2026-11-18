@@ -68,6 +68,8 @@ const DYNAMIC_SETTLE_FRAMES: u32 = 10;
 const DYNAMIC_STEP_FRAMES: u32 = 2;
 /// Frames between status readings.
 const STATUS_EVERY: u32 = 60;
+/// Below this many free bytes on the card the status bar summary turns red.
+const LOW_SPACE: u64 = 1024 * 1024 * 1024;
 /// The tint wash over the top of the screen (`TINT_AMBIENT`): its height and
 /// its alpha at the top; it blends to the next title's tint in 300 ms.
 const AMBIENT_H: f32 = 380.0;
@@ -186,6 +188,8 @@ pub struct Shelf {
     missing: usize,
     /// The status bar's summary text, built each second from the two above.
     summary: String,
+    /// The card has less than `LOW_SPACE` free; the summary is drawn in the warning color.
+    summary_low: bool,
     frame: u32,
     now: u64,
     launching: Option<String>,
@@ -307,6 +311,7 @@ impl Shelf {
             free: None,
             missing: 0,
             summary: String::new(),
+            summary_low: false,
             frame: 0,
             now: 0,
             launching: None,
@@ -526,6 +531,7 @@ impl Shelf {
                 self.free = host.storage_space().map(|(free, _)| free);
             }
             self.summary = self.summary_text();
+            self.summary_low = self.free.is_some_and(|free| free < LOW_SPACE);
         }
         self.frame += 1;
         let mut pressed = pad & !self.previous;
@@ -615,6 +621,9 @@ impl Shelf {
             self.restore_input(host, step, pressed & TRIANGLE != 0, pressed & cancel != 0);
         } else if self.vpks.is_some() {
             self.vpks_input(host, step, pressed & confirm != 0, pressed & cancel != 0, pressed & SQUARE != 0);
+            if pressed & TRIANGLE != 0 {
+                self.vpks_delete(host);
+            }
         } else if self.storage.is_some() {
             self.storage_input(host, step, pressed & confirm != 0, pressed & cancel != 0);
         } else if self.rescan.is_some() {
@@ -1419,6 +1428,7 @@ impl Shelf {
             settings: &self.settings,
             status: &self.status,
             summary: &self.summary,
+            summary_low: self.summary_low,
             tabs: &self.tabs,
             current: &self.tab,
             now: self.now,
@@ -2299,6 +2309,41 @@ mod tests {
         assert!(shelf.vpks.as_ref().unwrap().note.contains("Alpha"));
         shelf.vpks_input(&mut host, None, false, true, false);
         assert!(shelf.vpks.is_none());
+    }
+
+    /// A package of an installed title says so and asks before it replaces it;
+    /// deleting a package file asks twice.
+    #[test]
+    fn the_install_panel_warns_about_an_installed_title_and_deletes_files() {
+        use crate::host::VpkInfo;
+        let (mut shelf, mut host) = setup(true, PluginState::On);
+        shelf.open_vpks(&mut host);
+        let pkg = |file: &str, title: &str, id: &str, installed: Option<&str>| VpkInfo {
+            path: format!("ux0:install/{file}"),
+            file: file.into(),
+            title: title.into(),
+            title_id: id.into(),
+            version: "02.00".into(),
+            installed: installed.map(str::to_string),
+            ..Default::default()
+        };
+        shelf.vpks_listed(&mut host, vec![pkg("a.vpk", "Alpha", "ALPH00001", Some("01.00")), pkg("b.vpk", "Beta", "BETA00001", None)]);
+        shelf.vpks_input(&mut host, None, true, false, false);
+        let note = shelf.vpks.as_ref().unwrap().note.clone();
+        assert!(note.contains("01.00") && note.contains("02.00"), "{note}");
+        // Delete: the first press asks, the second goes to the host (which cannot here).
+        shelf.vpks_delete(&mut host);
+        assert_eq!(shelf.vpks.as_ref().unwrap().armed_delete.as_deref(), Some("ux0:install/a.vpk"));
+        assert_eq!(shelf.vpks.as_ref().unwrap().armed, None);
+        shelf.vpks_delete(&mut host);
+        assert!(shelf.vpks.as_ref().unwrap().note.contains("unavailable"));
+        // The host's answer takes the package out of the list.
+        shelf.vpk_deleted("ux0:install/a.vpk", true);
+        let panel = shelf.vpks.as_ref().unwrap();
+        assert_eq!(panel.list.len(), 1);
+        assert!(panel.note.contains("Alpha"), "{}", panel.note);
+        shelf.vpk_deleted("ux0:install/b.vpk", true);
+        assert!(shelf.vpks.as_ref().unwrap().list.is_empty());
     }
 
     #[test]
