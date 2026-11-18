@@ -191,6 +191,16 @@ impl App {
                         shelf.cores_listed(&id, lists);
                     }
                 }
+                Event::Vpks(list) => {
+                    if let Some(shelf) = &mut self.shelf {
+                        shelf.vpks_listed(host, list);
+                    }
+                }
+                Event::VpkInstalled(path, result) => {
+                    if let Some(shelf) = &mut self.shelf {
+                        shelf.vpk_installed(host, &path, result);
+                    }
+                }
                 Event::StorageChecked(found) => {
                     if let Some(shelf) = &mut self.shelf {
                         shelf.storage_checked(found);

@@ -15,6 +15,7 @@ pub mod panel;
 mod database;
 mod storage;
 mod tools;
+mod vpk;
 mod update;
 mod online;
 mod touch;
@@ -212,6 +213,8 @@ pub struct Shelf {
     rescan: Option<tools::Rescan>,
     /// SELECT ▸ System ▸ Storage.
     storage: Option<storage::Storage>,
+    /// SELECT ▸ System ▸ Install VPK.
+    vpks: Option<vpk::Vpks>,
     database: Option<database::DatabaseRun>,
     fetch: Option<artwork::FetchPanel>,
     /// Pictures Fetch artwork applied since the title changes were written.
@@ -310,6 +313,7 @@ impl Shelf {
             pending_picker_confirm: false,
             rescan: None,
             storage: None,
+            vpks: None,
             database: None,
             fetch: None,
             fetch_unsaved: 0,
@@ -431,6 +435,9 @@ impl Shelf {
         // The picker's preview: a backdrop is its own; an icon or box art
         // also goes to the art cache below.
         if self.browser_picture(gfx, &key, &picture) {
+            return;
+        }
+        if self.vpks_picture(gfx, &key, &picture) {
             return;
         }
         if self.picker_picture(gfx, &key, &picture) {
@@ -583,6 +590,8 @@ impl Shelf {
             self.cleanup_input(host, step, pressed & confirm != 0, pressed & cancel != 0);
         } else if self.console_start.is_some() {
             self.console_start_input(host, step, pressed & confirm != 0, pressed & cancel != 0);
+        } else if self.vpks.is_some() {
+            self.vpks_input(host, step, pressed & confirm != 0, pressed & cancel != 0, pressed & SQUARE != 0);
         } else if self.storage.is_some() {
             self.storage_input(host, step, pressed & confirm != 0, pressed & cancel != 0);
         } else if self.rescan.is_some() {
@@ -709,6 +718,7 @@ impl Shelf {
         }
         self.picker_frame(host);
         self.browser_frame(host);
+        self.vpks_frame(host);
         self.online_frame(host);
         self.request_icons(host);
         self.blend_dynamic();
@@ -1032,6 +1042,10 @@ impl Shelf {
             }
             Item::Storage => {
                 self.open_storage(host);
+                return;
+            }
+            Item::InstallVpk => {
+                self.open_vpks(host);
                 return;
             }
             Item::ConsoleStart => {
@@ -1415,6 +1429,9 @@ impl Shelf {
         if self.storage.is_some() {
             self.draw_storage(gfx);
         }
+        if self.vpks.is_some() {
+            self.draw_vpks(gfx);
+        }
         if self.database.is_some() {
             self.draw_database(gfx);
         }
@@ -1748,6 +1765,7 @@ impl Shelf {
             Item::RetroConsoles => (t.retro_consoles, on_off(!s.retro_view.hide_consoles), None, Both),
             Item::Diagnostics => (t.diagnostics, None, None, Right),
             Item::Storage => (t.storage, None, None, Right),
+            Item::InstallVpk => (t.install_vpk, None, None, Right),
             Item::ConsoleStart => (t.console_start, None, None, Right),
             // While it runs, what it reads and how far it is.
             Item::RescanTab => (t.rescan_tab, self.scan_value(), None, Right),
@@ -2037,7 +2055,7 @@ mod tests {
     fn every_menu_setting_is_saved() {
         use menu::{items, Item, PAGES};
         let (mut shelf, mut host) = setup(true, PluginState::On);
-        let actions = [Item::RescanTab, Item::FetchArt, Item::CleanArt, Item::Rescan, Item::GameDatabase, Item::CheckUpdates, Item::Diagnostics, Item::Storage, Item::Categories, Item::ConsoleStart];
+        let actions = [Item::RescanTab, Item::FetchArt, Item::CleanArt, Item::Rescan, Item::GameDatabase, Item::CheckUpdates, Item::Diagnostics, Item::Storage, Item::InstallVpk, Item::Categories, Item::ConsoleStart];
         let mut checked = 0;
         for page in PAGES {
             for (row, item) in items(page).iter().enumerate() {
@@ -2195,6 +2213,46 @@ mod tests {
         // Back closes it.
         shelf.storage_input(&mut host, None, false, true);
         assert!(shelf.storage.is_none());
+    }
+
+    /// SELECT ▸ System ▸ Install VPK: the list is sorted, a package with a
+    /// problem is not installed, and an install asks twice.
+    #[test]
+    fn the_install_panel_lists_sorts_and_asks_twice() {
+        use crate::host::VpkInfo;
+        let (mut shelf, mut host) = setup(true, PluginState::On);
+        shelf.open_vpks(&mut host);
+        let pkg = |file: &str, title: &str, id: &str, size: u64| VpkInfo { path: format!("ux0:install/{file}"), file: file.into(), title: title.into(), title_id: id.into(), size, ..Default::default() };
+        let mut bad = pkg("bad.vpk", "Zed", "", 1);
+        bad.problem = "no eboot.bin".into();
+        shelf.vpks_listed(&mut host, vec![pkg("b.vpk", "Beta", "BETA00001", 5), pkg("a.vpk", "Alpha", "ALPH00001", 9), bad]);
+        let names = |shelf: &Shelf| shelf.vpks.as_ref().unwrap().list.iter().map(|i| i.title.clone()).collect::<Vec<_>>();
+        assert_eq!(names(&shelf), ["Alpha", "Beta", "Zed"]);
+        // The first press asks; the second hands it to the host, which cannot here.
+        shelf.vpks_input(&mut host, None, true, false, false);
+        assert_eq!(shelf.vpks.as_ref().unwrap().armed.as_deref(), Some("ux0:install/a.vpk"));
+        shelf.vpks_input(&mut host, None, true, false, false);
+        let panel = shelf.vpks.as_ref().unwrap();
+        assert_eq!((panel.armed.clone(), panel.installing.clone()), (None, None));
+        assert!(panel.note.contains("unavailable"), "{}", panel.note);
+        // Square: by date (all equal, so by name), then by size, largest first.
+        shelf.vpks_input(&mut host, None, false, false, true);
+        shelf.vpks_input(&mut host, None, false, false, true);
+        assert_eq!(names(&shelf), ["Alpha", "Beta", "Zed"]);
+        assert_eq!(shelf.vpks.as_ref().unwrap().sort, vpk::VpkSort::Size);
+        // A package with a problem says why and is never asked about.
+        for _ in 0..2 {
+            shelf.vpks_input(&mut host, Some(navigation::Step::Press(navigation::Direction::Down)), false, false, false);
+        }
+        shelf.vpks_input(&mut host, None, true, false, false);
+        let panel = shelf.vpks.as_ref().unwrap();
+        assert_eq!(panel.armed, None);
+        assert!(panel.note.contains("no eboot.bin"), "{}", panel.note);
+        // The answer of an install names the package.
+        shelf.vpk_installed(&mut host, "ux0:install/a.vpk", Ok("ALPH00001".into()));
+        assert!(shelf.vpks.as_ref().unwrap().note.contains("Alpha"));
+        shelf.vpks_input(&mut host, None, false, true, false);
+        assert!(shelf.vpks.is_none());
     }
 
     #[test]

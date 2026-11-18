@@ -222,6 +222,36 @@ pub struct Leftover {
     pub bytes: u64,
 }
 
+/// A `.vpk` found in `ux0:install` or a folder below it ([`Host::vpk_scan`]).
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
+pub struct VpkInfo {
+    /// The full path (`ux0:install/games/a.vpk`).
+    pub path: String,
+    /// The file's name.
+    pub file: String,
+    pub size: u64,
+    /// Seconds since 1970; 0 when the host cannot tell.
+    pub modified: u64,
+    /// `TITLE`, `TITLE_ID` and `APP_VER` of the package's `sce_sys/param.sfo`.
+    pub title: String,
+    pub title_id: String,
+    pub version: String,
+    /// The package's `icon0.png`, saved as a file the host can decode.
+    pub icon: Option<String>,
+    /// Why the package cannot be installed ("" when it can).
+    pub problem: String,
+}
+
+/// Where [`Host::vpk_install`] is, from [`Host::vpk_progress`].
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum VpkProgress {
+    Idle,
+    /// Bytes of the package's files written so far, and in all.
+    Unpacking(u64, u64),
+    /// The system's installer runs.
+    Installing,
+}
+
 /// A folder's entry, as [`Host::list_folder`] answers it.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct FolderEntry {
@@ -329,6 +359,10 @@ pub enum Event {
     Cores(String, Vec<CoreList>),
     /// [`Host::folder_sizes`] finished for this title.
     Folders(String, FolderSizes),
+    /// [`Host::vpk_scan`] finished.
+    Vpks(Vec<VpkInfo>),
+    /// [`Host::vpk_install`] finished: the path, and the title id or why not.
+    VpkInstalled(String, Result<String, String>),
     /// [`Host::storage_check`] finished.
     StorageChecked(Vec<Leftover>),
     /// [`Host::storage_clean`] finished: folders removed, folders that stayed.
@@ -595,6 +629,24 @@ pub trait Host {
     /// answered with [`Event::Folders`]. False when this host cannot.
     fn folder_sizes(&mut self, _id: &str) -> bool {
         false
+    }
+
+    /// List the `.vpk` files in `ux0:install` and the folders below it, with
+    /// each one's name, icon and size, on a worker thread; answered with
+    /// [`Event::Vpks`]. False when this host cannot.
+    fn vpk_scan(&mut self) -> bool {
+        false
+    }
+
+    /// Install one of those packages on a worker thread; answered with
+    /// [`Event::VpkInstalled`].
+    fn vpk_install(&mut self, _path: &str) -> bool {
+        false
+    }
+
+    /// How far the install is; read each frame while it runs.
+    fn vpk_progress(&mut self) -> VpkProgress {
+        VpkProgress::Idle
     }
 
     /// The memory card's free and total bytes (`ux0:`); None when this host

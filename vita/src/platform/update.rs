@@ -30,8 +30,9 @@ use std::string::String;
 use std::sync::Mutex;
 use std::vec::Vec;
 
-/// Files in a VPK. Pocket Shelf's has about forty.
-const ENTRIES_MAX: usize = 4096;
+/// Files in a VPK. Pocket Shelf's has about forty; a game's can have tens of
+/// thousands (the central directory is read whole, about 100 bytes a file).
+const ENTRIES_MAX: usize = 65_535;
 /// Largest file unpacked. The release eboot.bin is about 2.4 MB.
 const ENTRY_MAX: usize = 64 * 1024 * 1024;
 /// The end-of-central-directory record is in the file's last 64 KiB + 22 bytes.
@@ -121,13 +122,13 @@ fn check(dir: &str) -> Result<String, String> {
     Ok(super::installed::sfo_string(&sfo, "APP_VER").unwrap_or_default())
 }
 
-struct Entry {
-    name: String,
-    method: u16,
-    crc: u32,
-    compressed: usize,
-    size: usize,
-    header: u64,
+pub(super) struct Entry {
+    pub(super) name: String,
+    pub(super) method: u16,
+    pub(super) crc: u32,
+    pub(super) compressed: usize,
+    pub(super) size: usize,
+    pub(super) header: u64,
 }
 
 fn u16_at(bytes: &[u8], at: usize) -> Option<u16> {
@@ -149,7 +150,7 @@ fn safe_name(name: &str) -> bool {
 }
 
 /// The central directory of a ZIP file: every entry's name, sizes and where its data starts.
-fn entries(file: &mut fs::File) -> Result<Vec<Entry>, String> {
+pub(super) fn entries(file: &mut fs::File) -> Result<Vec<Entry>, String> {
     let length = file.metadata().map_err(|_| String::from("vpk stat"))?.len();
     let tail_len = length.min(TAIL_MAX);
     let mut tail = vec![0u8; tail_len as usize];
@@ -226,8 +227,8 @@ fn unpack(vpk: &str, dir: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// One file's bytes, inflated and checked against its CRC-32.
-fn read_entry(file: &mut fs::File, entry: &Entry) -> Result<Vec<u8>, String> {
+/// Put `file` at the first byte of the entry's data, after its local header.
+pub(super) fn data_start(file: &mut fs::File, entry: &Entry) -> Result<(), String> {
     let mut local = [0u8; 30];
     file.seek(SeekFrom::Start(entry.header)).map_err(|_| String::from("vpk seek"))?;
     file.read_exact(&mut local).map_err(|_| String::from("vpk read"))?;
@@ -236,6 +237,12 @@ fn read_entry(file: &mut fs::File, entry: &Entry) -> Result<Vec<u8>, String> {
     }
     let skip = u16_at(&local, 26).unwrap_or(0) as i64 + u16_at(&local, 28).unwrap_or(0) as i64;
     file.seek(SeekFrom::Current(skip)).map_err(|_| String::from("vpk seek"))?;
+    Ok(())
+}
+
+/// One file's bytes, inflated and checked against its CRC-32.
+pub(super) fn read_entry(file: &mut fs::File, entry: &Entry) -> Result<Vec<u8>, String> {
+    data_start(file, entry)?;
     let mut raw = vec![0u8; entry.compressed];
     file.read_exact(&mut raw).map_err(|_| format!("{} cut short", entry.name))?;
     let data = match entry.method {
@@ -251,6 +258,12 @@ fn read_entry(file: &mut fs::File, entry: &Entry) -> Result<Vec<u8>, String> {
 }
 
 fn crc32(bytes: &[u8]) -> u32 {
+    !crc32_update(!0, bytes)
+}
+
+/// Continue a CRC-32 over more bytes: start from `!0`, and the checksum is
+/// `!state` after the last piece.
+pub(super) fn crc32_update(state: u32, bytes: &[u8]) -> u32 {
     static TABLE: std::sync::OnceLock<[u32; 256]> = std::sync::OnceLock::new();
     let table = TABLE.get_or_init(|| {
         let mut table = [0u32; 256];
@@ -263,9 +276,7 @@ fn crc32(bytes: &[u8]) -> u32 {
         }
         table
     });
-    !bytes
-        .iter()
-        .fold(!0u32, |crc, &byte| table[((crc ^ byte as u32) & 0xff) as usize] ^ (crc >> 8))
+    bytes.iter().fold(state, |crc, &byte| table[((crc ^ byte as u32) & 0xff) as usize] ^ (crc >> 8))
 }
 
 // --- Installing ----------------------------------------------------------------

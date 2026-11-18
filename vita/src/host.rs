@@ -627,6 +627,25 @@ impl Host for VitaHost {
         true
     }
 
+    fn vpk_scan(&mut self) -> bool {
+        self.storage_job("vpk scan", |sender| {
+            let list = crate::platform::vpk::scan();
+            let _ = sender.send(Event::Vpks(list));
+        })
+    }
+
+    fn vpk_install(&mut self, path: &str) -> bool {
+        let path = path.to_string();
+        self.storage_job("vpk install", move |sender| {
+            let result = crate::platform::vpk::install(&path);
+            let _ = sender.send(Event::VpkInstalled(path, result));
+        })
+    }
+
+    fn vpk_progress(&mut self) -> shelf_core::host::VpkProgress {
+        crate::platform::vpk::progress()
+    }
+
     fn storage_space(&mut self) -> Option<(u64, u64)> {
         crate::platform::storage::space()
     }
