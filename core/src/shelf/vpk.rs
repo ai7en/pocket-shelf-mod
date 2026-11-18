@@ -207,11 +207,6 @@ impl Shelf {
         if !confirm {
             return;
         }
-        let Some(info) = panel.list.get(panel.row).cloned() else { return };
-        if !info.problem.is_empty() {
-            panel.note = fill(t.failed, &[("reason", &info.problem)]);
-            return;
-        }
         if !panel.marked.is_empty() {
             // Marked packages go in one run, in the order shown.
             if panel.armed.as_deref() != Some(BATCH) {
@@ -225,6 +220,11 @@ impl Shelf {
             panel.batching = true;
             panel.batch = (0, 0);
             self.vpk_start_next(host);
+            return;
+        }
+        let Some(info) = panel.list.get(panel.row).cloned() else { return };
+        if !info.problem.is_empty() {
+            panel.note = fill(t.failed, &[("reason", &info.problem)]);
             return;
         }
         let name = shown_name(&info).to_string();
