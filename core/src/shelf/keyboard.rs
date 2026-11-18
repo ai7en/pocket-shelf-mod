@@ -125,7 +125,7 @@ pub fn accents_first(language: Language) -> &'static str {
         Language::De => "äöüß",
         Language::Fr => "éèêëàâçîïôùûüÿœæ",
         Language::Es => "áéíóúñü",
-        Language::En => "",
+        Language::En | Language::Ru => "",
     }
 }
 

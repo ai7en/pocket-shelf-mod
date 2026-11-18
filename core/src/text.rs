@@ -12,6 +12,14 @@ use crate::gfx::{Color, Format, Gfx, Rect, TexId, Textures};
 
 const REGULAR: &[u8] = include_bytes!("../../fonts/Figtree-Regular.ttf");
 const BOLD: &[u8] = include_bytes!("../../fonts/Figtree-Bold.ttf");
+/// Figtree has no Cyrillic; these Noto Sans subsets (U+0400-045F and №) draw it.
+const CYRILLIC_REGULAR: &[u8] = include_bytes!("../../fonts/NotoSansCyrillic-Regular.ttf");
+const CYRILLIC_BOLD: &[u8] = include_bytes!("../../fonts/NotoSansCyrillic-Bold.ttf");
+
+/// Whether `ch` comes from the Cyrillic fonts.
+fn cyrillic(ch: char) -> bool {
+    matches!(ch, '\u{400}'..='\u{45f}' | '\u{2116}')
+}
 
 const ATLAS: u32 = 1024;
 const PAD: u32 = 1;
@@ -81,6 +89,8 @@ struct Glyph {
 pub(crate) struct FontState {
     regular: Font,
     bold: Font,
+    cyrillic_regular: Font,
+    cyrillic_bold: Font,
     glyphs: HashMap<(Weight, u16, char), Glyph>,
     atlas: TexId,
     pen_x: u32,
@@ -98,13 +108,22 @@ impl FontState {
         let load = |bytes| Font::from_bytes(bytes, FontSettings::default()).expect("font");
         let atlas = textures.add(ATLAS, ATLAS, Format::A8, vec![0; (ATLAS * ATLAS) as usize], true);
         textures.list[atlas.0 as usize].keep = true;
-        FontState { regular: load(REGULAR), bold: load(BOLD), glyphs: HashMap::new(), atlas, pen_x: 0, pen_y: 0, row_h: 0, full: false, resets: 0 }
+        FontState { regular: load(REGULAR), bold: load(BOLD), cyrillic_regular: load(CYRILLIC_REGULAR), cyrillic_bold: load(CYRILLIC_BOLD), glyphs: HashMap::new(), atlas, pen_x: 0, pen_y: 0, row_h: 0, full: false, resets: 0 }
     }
 
     fn font(&self, weight: Weight) -> &Font {
         match weight {
             Weight::Regular => &self.regular,
             Weight::Bold => &self.bold,
+        }
+    }
+
+    /// The font that has `ch`: Figtree, or the Cyrillic subset.
+    fn font_for(&self, weight: Weight, ch: char) -> &Font {
+        match (weight, cyrillic(ch)) {
+            (Weight::Regular, true) => &self.cyrillic_regular,
+            (Weight::Bold, true) => &self.cyrillic_bold,
+            (weight, false) => self.font(weight),
         }
     }
 
@@ -131,9 +150,9 @@ impl FontState {
             return (glyph, false);
         }
         if self.full {
-            return (Glyph { src: None, left: 0.0, top: 0.0, advance: self.font(weight).metrics(ch, px as f32).advance_width }, false);
+            return (Glyph { src: None, left: 0.0, top: 0.0, advance: self.font_for(weight, ch).metrics(ch, px as f32).advance_width }, false);
         }
-        let (metrics, bitmap) = self.font(weight).rasterize(ch, px as f32);
+        let (metrics, bitmap) = self.font_for(weight, ch).rasterize(ch, px as f32);
         let (w, h) = (metrics.width as u32, metrics.height as u32);
         let mut src = None;
         if w > 0 && h > 0 {
@@ -161,7 +180,10 @@ impl FontState {
     }
 
     fn kern(&self, weight: Weight, px: u16, left: char, right: char) -> f32 {
-        self.font(weight).horizontal_kern(left, right, px as f32).unwrap_or(0.0)
+        if cyrillic(left) != cyrillic(right) {
+            return 0.0;
+        }
+        self.font_for(weight, left).horizontal_kern(left, right, px as f32).unwrap_or(0.0)
     }
 
     /// Ascent and descent (negative) in pixels.

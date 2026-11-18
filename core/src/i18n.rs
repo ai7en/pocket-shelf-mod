@@ -4,15 +4,16 @@
 use crate::host::ScanPhase;
 use crate::library::categories::{Category, CategoryName};
 use crate::library::settings::Language;
-use crate::locales::{Messages, DE, EN, ES, FR, TR};
+use crate::locales::{Messages, DE, EN, ES, FR, RU, TR};
 
 /// Each language under its own name, in menu order.
-pub const LANGUAGES: [(Language, &str); 5] = [
+pub const LANGUAGES: [(Language, &str); 6] = [
     (Language::En, "English"),
     (Language::Tr, "Türkçe"),
     (Language::De, "Deutsch"),
     (Language::Fr, "Français"),
     (Language::Es, "Español"),
+    (Language::Ru, "Русский"),
 ];
 
 /// The texts of a language.
@@ -23,6 +24,7 @@ pub fn messages(language: Language) -> &'static Messages {
         Language::De => &DE,
         Language::Fr => &FR,
         Language::Es => &ES,
+        Language::Ru => &RU,
     }
 }
 
@@ -158,6 +160,33 @@ mod tests {
         assert_eq!(upper("Kategoriler", Language::Tr), "KATEGORİLER");
         assert_eq!(upper("Yazı tipi", Language::Tr), "YAZI TİPİ");
         assert_eq!(upper("Kategorien", Language::De), "KATEGORIEN");
+    }
+
+    /// Every character of the Russian texts has a glyph in Figtree or in the
+    /// Cyrillic subset, so none draws as a gap.
+    #[test]
+    fn the_russian_texts_have_glyphs() {
+        use fontdue::{Font, FontSettings};
+        let load = |bytes: &[u8]| Font::from_bytes(bytes, FontSettings::default()).unwrap();
+        let fonts = [
+            load(include_bytes!("../../fonts/Figtree-Regular.ttf")),
+            load(include_bytes!("../../fonts/Figtree-Bold.ttf")),
+            load(include_bytes!("../../fonts/NotoSansCyrillic-Regular.ttf")),
+            load(include_bytes!("../../fonts/NotoSansCyrillic-Bold.ttf")),
+        ];
+        for (key, text) in messages(Language::Ru).texts() {
+            for c in text.chars().filter(|c| !c.is_whitespace()) {
+                let cyrillic = matches!(c, '\u{400}'..='\u{45f}' | '\u{2116}');
+                let (regular, bold) = if cyrillic { (&fonts[2], &fonts[3]) } else { (&fonts[0], &fonts[1]) };
+                assert_ne!(regular.lookup_glyph_index(c), 0, "{key}: {c:?} (regular)");
+                assert_ne!(bold.lookup_glyph_index(c), 0, "{key}: {c:?} (bold)");
+            }
+        }
+    }
+
+    #[test]
+    fn upper_handles_cyrillic() {
+        assert_eq!(upper("Настройки", Language::Ru), "НАСТРОЙКИ");
     }
 
     #[test]

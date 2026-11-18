@@ -26,7 +26,7 @@ macro_rules! keyed {
     };
 }
 
-keyed!(Language { En = "en", Tr = "tr", De = "de", Fr = "fr", Es = "es" });
+keyed!(Language { En = "en", Tr = "tr", De = "de", Fr = "fr", Es = "es", Ru = "ru" });
 keyed!(
     /// The shelf's views, in the View row's order.
     ViewMode {

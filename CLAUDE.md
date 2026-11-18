@@ -24,7 +24,7 @@ Pocket Shelf is a PS Vita launcher written in Rust (`POCKTSHLF`; latest release 
 - **cargo-vita does not pass the title id to the compiler.** `vita/build.rs` reads it from `Cargo.toml` (`SHELF_TITLE_ID`); without it 0.2.0-beta.1's first build listed itself, refused to download updates and could not pass its own package check.
 - **`vita-elf-create: ... segment 1 overlaps`**: resize `LINK_PAD` in `vita/src/main.rs` by a few KiB. About one change in twenty triggers it.
 - **After adding or updating a dependency, run `make notices`**: the VPK carries `vita/package/THIRD_PARTY_NOTICES.txt`, the licenses of every crate linked into the executable (macros and build tools left out), and the updater's GPL text travels as `updater/LICENSE.txt` (`make updater`).
-- **Every text is in five languages.** A new text goes in `Messages`, each language constant and `Messages::texts` (the tests check all three); keep the keyboard's and the texts' characters inside Figtree (`fonts/`).
+- **Every text is in six languages** (English, Turkish, German, French, Spanish, Russian). A new text goes in `Messages`, each language constant and `Messages::texts` (the tests check all three); keep the keyboard's and the texts' characters inside Figtree (`fonts/`). Russian draws its Cyrillic letters from `fonts/NotoSansCyrillic-*.ttf` (`core/src/text.rs`); the keyboard has no Cyrillic keys.
 
 ## Releases and updates
 
