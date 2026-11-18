@@ -230,6 +230,8 @@ pub struct Shelf {
     restore: Option<restore::Restore>,
     /// Every title this card has had, from `known.tsv`; None until read.
     ledger: Option<Vec<restore::Seen>>,
+    /// Title ids of the packages found in `ux0:install` by the last scan.
+    packaged: std::collections::HashSet<String>,
     database: Option<database::DatabaseRun>,
     fetch: Option<artwork::FetchPanel>,
     /// Pictures Fetch artwork applied since the title changes were written.
@@ -335,6 +337,7 @@ impl Shelf {
             vpks: None,
             restore: None,
             ledger: None,
+            packaged: Default::default(),
             database: None,
             fetch: None,
             fetch_unsaved: 0,

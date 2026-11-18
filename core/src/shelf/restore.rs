@@ -130,6 +130,8 @@ impl Shelf {
 
     pub(super) fn open_restore(&mut self, host: &mut dyn Host) {
         self.update_ledger(host);
+        // Which of them have a package waiting; the answer arrives as Event::Vpks.
+        host.vpk_scan();
         self.restore = Some(Restore { row: 0 });
         self.drawer = panel::slide();
         self.drawer.set(1.0, self.now);
@@ -168,7 +170,8 @@ impl Shelf {
         drawer.selectable = true;
         for (i, (id, name)) in list.iter().enumerate().skip(first).take(ROWS) {
             let label = gfx.fit(Role::BodyBold, if name.is_empty() { id } else { name }, 330.0);
-            drawer.row(gfx, &label, Some(id), None, i == panel.row, Step::None);
+            let value = if self.packaged.contains(id) { t.restore_packaged } else { id.as_str() };
+            drawer.row(gfx, &label, Some(value), None, i == panel.row, Step::None);
         }
         let note = if list.is_empty() { t.restore_none.to_string() } else { format!("{}\n{}", fill(t.restore_count, &[("count", &list.len().to_string())]), t.restore_help) };
         drawer.note(gfx, &note, 1);

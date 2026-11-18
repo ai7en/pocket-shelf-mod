@@ -133,6 +133,8 @@ impl Shelf {
     /// The host's list.
     pub fn vpks_listed(&mut self, host: &mut dyn Host, mut list: Vec<VpkInfo>) {
         let t = self.t();
+        // To reinstall marks the titles that have a package, whether or not this panel is open.
+        self.packaged = list.iter().filter(|info| info.problem.is_empty()).map(|info| info.title_id.clone()).collect();
         let Some(panel) = &mut self.vpks else { return };
         sort_list(&mut list, panel.sort);
         panel.scanning = false;
