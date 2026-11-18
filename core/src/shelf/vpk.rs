@@ -1,4 +1,4 @@
-//! SELECT ▸ System ▸ Install VPK: the packages the host found in
+//! SELECT ▸ Tools ▸ Install VPK: the packages the host found in
 //! `ux0:install` and its folders, each with the name and icon of the game or
 //! homebrew inside, and the install of the highlighted one (two presses).
 //! The host reads and installs on worker threads; the panel lists, sorts

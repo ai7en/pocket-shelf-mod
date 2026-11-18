@@ -473,6 +473,10 @@ impl Shelf {
     pub fn game_work_done(&mut self, host: &mut dyn Host, id: &str, work: crate::host::GameWork, result: Result<u64, String>) {
         use crate::host::GameWork;
         let t = self.t();
+        // A title deleted here on purpose is not one to reinstall.
+        if work != GameWork::Shrink && result.is_ok() {
+            self.ledger_forget(host, id);
+        }
         let Some(editor) = self.editor.as_mut().filter(|e| e.id == id) else {
             if work != GameWork::Shrink && result.is_ok() {
                 host.rescan_some(vec![crate::host::ScanPhase::Apps]);

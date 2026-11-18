@@ -449,6 +449,7 @@ pub const SAVED_FILES: &[&str] = &[
     crate::library::settings::EMULATORS_FILE,
     crate::library::played::PLAYS_FILE,
     crate::library::order::SORT_FILE,
+    crate::shelf::restore::LEDGER_FILE,
     crate::online::steamgriddb::KEY_FILE,
     crate::updates::RECORD_FILE,
     crate::updates::UPDATE_VERSION_FILE,

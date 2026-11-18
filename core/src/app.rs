@@ -153,6 +153,9 @@ impl App {
                         self.rebuild_us = host.time_us() - started;
                         host.log(&format!("library: {} titles in {} us", shelf.games().len(), self.rebuild_us));
                     }
+                    if let Some(shelf) = &mut self.shelf {
+                        shelf.update_ledger(host);
+                    }
                     self.titled = true;
                 }
                 Event::Picture(key, picture) => {

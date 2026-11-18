@@ -1,7 +1,8 @@
 //! The SELECT menu's pages and rows. A row named after a page opens that
 //! page: the main page holds Appearance (how the shelf looks), Games (what
 //! is listed and what is known about it) and System (the console and the
-//! app); Appearance holds Status bar, Games holds Artwork. No page has more
+//! app); Appearance holds Status bar, Games holds Artwork. Tools holds
+//! Install VPK, Storage, To reinstall and Diagnostics. No page has more
 //! rows than show at once (`VISIBLE`). Language is the main page's last row,
 //! one press up from the first, so it can be found in a language the user
 //! cannot read.
@@ -14,6 +15,8 @@ pub enum Page {
     Games,
     Artwork,
     System,
+    /// Install VPK, Storage, To reinstall and Diagnostics.
+    Tools,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -57,6 +60,8 @@ pub enum Item {
     Storage,
     /// The packages in `ux0:install`, with their names and icons, to install.
     InstallVpk,
+    /// The titles this card has had that are not installed now.
+    Restore,
     /// Open at console start and Return after a game (`autostart.rs`). Not
     /// listed in any page: the console start plugin is unconfirmed on
     /// hardware (`docs/NOTES.md`, "Plugins"); the screen stays for when it is.
@@ -67,7 +72,7 @@ pub enum Item {
     RescanTab,
 }
 
-pub const PAGES: [Page; 6] = [Page::Main, Page::Appearance, Page::Status, Page::Games, Page::Artwork, Page::System];
+pub const PAGES: [Page; 7] = [Page::Main, Page::Appearance, Page::Status, Page::Games, Page::Artwork, Page::System, Page::Tools];
 
 /// Rows shown at once; the menu scrolls with the highlight.
 pub const VISIBLE: usize = 7;
@@ -75,12 +80,13 @@ pub const VISIBLE: usize = 7;
 pub fn items(page: Page) -> &'static [Item] {
     use Item::*;
     match page {
-        Page::Main => &[Sort, Open(Page::Appearance), Open(Page::Games), Open(Page::System), RescanTab, Language],
+        Page::Main => &[Sort, Open(Page::Appearance), Open(Page::Games), Open(Page::Tools), Open(Page::System), RescanTab, Language],
         Page::Appearance => &[Theme, View, TextSize, Details, Backdrop, IconBox, Open(Page::Status)],
         Page::Status => &[StatusBar, StatusPosition, ShowWifi, ShowBluetooth, ShowBattery, BatteryPercent, Clock],
         Page::Games => &[Categories, Emulator, Rescan, GameDatabase, GameNames, GameDetails, Open(Page::Artwork)],
         Page::Artwork => &[FetchArt, CleanArt],
-        Page::System => &[Confirm, Keyboard, RetroConsoles, UpdateChannel, CheckUpdates, InstallVpk, Storage, Diagnostics],
+        Page::System => &[Confirm, Keyboard, RetroConsoles, UpdateChannel, CheckUpdates],
+        Page::Tools => &[InstallVpk, Storage, Restore, Diagnostics],
     }
 }
 

@@ -13,6 +13,7 @@ pub mod menu;
 pub mod navigation;
 pub mod panel;
 mod database;
+mod restore;
 mod storage;
 mod tools;
 mod vpk;
@@ -215,6 +216,10 @@ pub struct Shelf {
     storage: Option<storage::Storage>,
     /// SELECT ▸ System ▸ Install VPK.
     vpks: Option<vpk::Vpks>,
+    /// SELECT ▸ Tools ▸ To reinstall.
+    restore: Option<restore::Restore>,
+    /// Every title this card has had, from `known.tsv`; None until read.
+    ledger: Option<Vec<restore::Seen>>,
     database: Option<database::DatabaseRun>,
     fetch: Option<artwork::FetchPanel>,
     /// Pictures Fetch artwork applied since the title changes were written.
@@ -314,6 +319,8 @@ impl Shelf {
             rescan: None,
             storage: None,
             vpks: None,
+            restore: None,
+            ledger: None,
             database: None,
             fetch: None,
             fetch_unsaved: 0,
@@ -590,6 +597,8 @@ impl Shelf {
             self.cleanup_input(host, step, pressed & confirm != 0, pressed & cancel != 0);
         } else if self.console_start.is_some() {
             self.console_start_input(host, step, pressed & confirm != 0, pressed & cancel != 0);
+        } else if self.restore.is_some() {
+            self.restore_input(host, step, pressed & TRIANGLE != 0, pressed & cancel != 0);
         } else if self.vpks.is_some() {
             self.vpks_input(host, step, pressed & confirm != 0, pressed & cancel != 0, pressed & SQUARE != 0);
         } else if self.storage.is_some() {
@@ -1048,6 +1057,10 @@ impl Shelf {
                 self.open_vpks(host);
                 return;
             }
+            Item::Restore => {
+                self.open_restore(host);
+                return;
+            }
             Item::ConsoleStart => {
                 self.open_console_start(host);
                 return;
@@ -1432,6 +1445,9 @@ impl Shelf {
         if self.vpks.is_some() {
             self.draw_vpks(gfx);
         }
+        if self.restore.is_some() {
+            self.draw_restore(gfx);
+        }
         if self.database.is_some() {
             self.draw_database(gfx);
         }
@@ -1623,6 +1639,7 @@ impl Shelf {
             Page::Games => t.categories.games,
             Page::Artwork => t.artwork,
             Page::System => t.categories.system,
+            Page::Tools => t.tools,
         };
         match item {
             Item::Open(p) => (page(p), None, None, Right),
@@ -1766,6 +1783,7 @@ impl Shelf {
             Item::Diagnostics => (t.diagnostics, None, None, Right),
             Item::Storage => (t.storage, None, None, Right),
             Item::InstallVpk => (t.install_vpk, None, None, Right),
+            Item::Restore => (t.restore, None, None, Right),
             Item::ConsoleStart => (t.console_start, None, None, Right),
             // While it runs, what it reads and how far it is.
             Item::RescanTab => (t.rescan_tab, self.scan_value(), None, Right),
@@ -2055,7 +2073,7 @@ mod tests {
     fn every_menu_setting_is_saved() {
         use menu::{items, Item, PAGES};
         let (mut shelf, mut host) = setup(true, PluginState::On);
-        let actions = [Item::RescanTab, Item::FetchArt, Item::CleanArt, Item::Rescan, Item::GameDatabase, Item::CheckUpdates, Item::Diagnostics, Item::Storage, Item::InstallVpk, Item::Categories, Item::ConsoleStart];
+        let actions = [Item::RescanTab, Item::FetchArt, Item::CleanArt, Item::Rescan, Item::GameDatabase, Item::CheckUpdates, Item::Diagnostics, Item::Storage, Item::InstallVpk, Item::Restore, Item::Categories, Item::ConsoleStart];
         let mut checked = 0;
         for page in PAGES {
             for (row, item) in items(page).iter().enumerate() {

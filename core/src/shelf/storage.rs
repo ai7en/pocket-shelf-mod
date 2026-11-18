@@ -1,4 +1,4 @@
-//! SELECT ▸ System ▸ Storage: the memory card's space, a check for folders
+//! SELECT ▸ Tools ▸ Storage: the memory card's space, a check for folders
 //! no installed game owns, the largest games, and Shrink for every game.
 //! Each job runs on a host thread and answers with an `Event`; the panel
 //! shows what is known and starts one job at a time.

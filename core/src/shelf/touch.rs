@@ -39,6 +39,7 @@ impl Shelf {
             || self.rescan.is_some()
             || self.storage.is_some()
             || self.vpks.is_some()
+            || self.restore.is_some()
             || self.database.is_some()
             || self.diagnostics.is_some()
             || self.picker.is_some()
@@ -257,6 +258,9 @@ impl Shelf {
         if let Some(panel) = &self.vpks {
             return Some((panel.row, panel.list.len().max(1)));
         }
+        if let Some(panel) = &self.restore {
+            return Some((panel.row, self.to_reinstall_count().max(1)));
+        }
         if let Some(row) = self.diagnostics {
             let count = self.diagnostics_lines.len().max(1);
             return Some((row % count, count));
@@ -316,6 +320,14 @@ impl Shelf {
         }
         if let Some(panel) = &mut self.storage {
             panel.row = (panel.first + row).min(panel.count() - 1);
+            return;
+        }
+        if self.restore.is_some() {
+            let count = self.to_reinstall_count();
+            if let Some(panel) = &mut self.restore {
+                let first = panel.row.saturating_sub(7 / 2).min(count.saturating_sub(7));
+                panel.row = (first + row).min(count.saturating_sub(1));
+            }
             return;
         }
         if let Some(panel) = &mut self.vpks {
