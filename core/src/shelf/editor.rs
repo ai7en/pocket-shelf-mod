@@ -88,6 +88,9 @@ fn folders_value(sizes: &crate::host::FolderSizes) -> String {
     if let Some(bytes) = sizes.repatch {
         parts.push(format!("rePatch {}", format_size(bytes)));
     }
+    if let Some(bytes) = sizes.savedata {
+        parts.push(format!("saves {}", format_size(bytes)));
+    }
     parts.join(" \u{b7} ")
 }
 
@@ -259,7 +262,7 @@ impl Shelf {
     /// The edited title's rows; none when no title is edited.
     pub(super) fn editor_row_list(&self) -> Vec<Row> {
         let cores = self.editor_cores().is_some_and(|list| list.cores.len() > 1);
-        let folders = self.editor.as_ref().and_then(|e| e.folders).is_some_and(|f| f.app.is_some() || f.data.is_some() || f.repatch.is_some());
+        let folders = self.editor.as_ref().and_then(|e| e.folders).is_some_and(|f| f.app.is_some() || f.data.is_some() || f.repatch.is_some() || f.savedata.is_some());
         self.editor_game().map(|game| editor_rows(&game, cores, folders)).unwrap_or_default()
     }
 

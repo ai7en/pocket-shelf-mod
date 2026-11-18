@@ -890,7 +890,7 @@ impl Host for FakeHost {
 
     fn folder_sizes(&mut self, id: &str) -> bool {
         // What the renders show: a game with both folders.
-        let sizes = shelf_core::host::FolderSizes { app: Some(3_435_973_836), data: Some(1_288_490_189), repatch: Some(356_515_840) };
+        let sizes = shelf_core::host::FolderSizes { app: Some(3_435_973_836), data: Some(1_288_490_189), repatch: Some(356_515_840), savedata: Some(18_874_368) };
         self.later.push(Event::Folders(id.to_string(), sizes));
         true
     }

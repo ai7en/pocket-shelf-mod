@@ -191,6 +191,8 @@ pub struct FolderSizes {
     pub data: Option<u64>,
     /// `ux0:rePatch/<id>`.
     pub repatch: Option<u64>,
+    /// `ux0:user/00/savedata/<id>`: the title's saves. Delete with data leaves them.
+    pub savedata: Option<u64>,
 }
 
 /// What a storage check found beside the installed games.

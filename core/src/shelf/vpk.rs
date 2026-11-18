@@ -48,10 +48,20 @@ pub struct Vpks {
     pub armed: Option<String>,
     /// The package a first press of delete asked to confirm.
     pub armed_delete: Option<String>,
+    /// Packages marked for one run of installs, as paths.
+    pub marked: Vec<String>,
+    /// The marked packages still to install while a batch runs.
+    pub queue: Vec<String>,
+    pub batching: bool,
+    /// Installed and failed in this batch.
+    pub batch: (u32, u32),
     pub note: String,
     /// The highlighted package's icon, and its texture once decoded.
     pub preview: Option<(PictureKey, Option<(TexId, Option<u32>, [f32; 4])>)>,
 }
+
+/// What `armed` holds while a first press asked about the marked packages.
+const BATCH: &str = "*batch";
 
 /// A package's name for sorting and for the row.
 fn shown_name(info: &VpkInfo) -> &str {
@@ -92,7 +102,7 @@ impl Shelf {
     pub(super) fn open_vpks(&mut self, host: &mut dyn Host) {
         let scanning = host.vpk_scan();
         let note = if scanning { self.t().install_looking.to_string() } else { self.t().storage_failed.to_string() };
-        self.vpks = Some(Vpks { list: Vec::new(), sort: VpkSort::Name, row: 0, scanning, installing: None, armed: None, armed_delete: None, note, preview: None });
+        self.vpks = Some(Vpks { list: Vec::new(), sort: VpkSort::Name, row: 0, scanning, installing: None, armed: None, armed_delete: None, marked: Vec::new(), queue: Vec::new(), batching: false, batch: (0, 0), note, preview: None });
         self.drawer = panel::slide();
         self.drawer.set(1.0, self.now);
     }
@@ -202,6 +212,21 @@ impl Shelf {
             panel.note = fill(t.failed, &[("reason", &info.problem)]);
             return;
         }
+        if !panel.marked.is_empty() {
+            // Marked packages go in one run, in the order shown.
+            if panel.armed.as_deref() != Some(BATCH) {
+                panel.armed = Some(BATCH.to_string());
+                panel.armed_delete = None;
+                panel.note = fill(t.install_confirm_many, &[("count", &panel.marked.len().to_string())]);
+                return;
+            }
+            panel.armed = None;
+            panel.queue = panel.list.iter().filter(|i| panel.marked.contains(&i.path)).map(|i| i.path.clone()).collect();
+            panel.batching = true;
+            panel.batch = (0, 0);
+            self.vpk_start_next(host);
+            return;
+        }
         let name = shown_name(&info).to_string();
         if panel.armed.as_deref() != Some(info.path.as_str()) {
             panel.armed = Some(info.path.clone());
@@ -218,6 +243,49 @@ impl Shelf {
             panel.note = t.working.to_string();
         } else {
             panel.note = fill(t.failed, &[("reason", "unavailable")]);
+        }
+    }
+
+    /// R: mark or unmark the highlighted package for a batch; one with a problem cannot be marked.
+    pub(super) fn vpks_mark(&mut self) {
+        let Some(panel) = &mut self.vpks else { return };
+        if panel.installing.is_some() || panel.scanning {
+            return;
+        }
+        let Some(info) = panel.list.get(panel.row) else { return };
+        if !info.problem.is_empty() {
+            return;
+        }
+        let path = info.path.clone();
+        match panel.marked.iter().position(|p| *p == path) {
+            Some(at) => {
+                panel.marked.remove(at);
+            }
+            None => panel.marked.push(path),
+        }
+        panel.armed = None;
+        panel.note.clear();
+    }
+
+    /// Start the next package of a batch, or end the batch.
+    fn vpk_start_next(&mut self, host: &mut dyn Host) {
+        let t = self.t();
+        let Some(panel) = &mut self.vpks else { return };
+        while !panel.queue.is_empty() {
+            let path = panel.queue.remove(0);
+            if host.vpk_install(&path) {
+                panel.installing = Some(path);
+                panel.note = t.working.to_string();
+                return;
+            }
+            panel.batch.1 += 1;
+        }
+        panel.batching = false;
+        panel.marked.clear();
+        panel.note = fill(t.install_done_many, &[("ok", &panel.batch.0.to_string()), ("failed", &panel.batch.1.to_string())]);
+        // One read of the titles after the whole batch.
+        if panel.batch.0 > 0 {
+            host.rescan_some(vec![ScanPhase::Apps]);
         }
     }
 
@@ -251,6 +319,7 @@ impl Shelf {
         }
         let name = panel.list.iter().find(|info| info.path == path).map(|info| shown_name(info).to_string()).unwrap_or_default();
         panel.list.retain(|info| info.path != path);
+        panel.marked.retain(|p| p != path);
         panel.row = panel.row.min(panel.list.len().saturating_sub(1));
         panel.note = if panel.list.is_empty() { t.install_none.to_string() } else { fill(t.install_deleted, &[("name", &name)]) };
     }
@@ -259,11 +328,27 @@ impl Shelf {
     /// that failed half way may still have left an entry behind.
     pub fn vpk_installed(&mut self, host: &mut dyn Host, path: &str, result: Result<String, String>) {
         let t = self.t();
-        if result.is_ok() {
+        let ok = result.is_ok();
+        let Some(panel) = &mut self.vpks else {
+            if ok {
+                host.rescan_some(vec![ScanPhase::Apps]);
+            }
+            return;
+        };
+        panel.installing = None;
+        if panel.batching {
+            if ok {
+                panel.batch.0 += 1;
+            } else {
+                panel.batch.1 += 1;
+            }
+            self.vpk_start_next(host);
+            return;
+        }
+        if ok {
             host.rescan_some(vec![ScanPhase::Apps]);
         }
         let Some(panel) = &mut self.vpks else { return };
-        panel.installing = None;
         let name = panel.list.iter().find(|info| info.path == path).map(|info| shown_name(info).to_string()).unwrap_or_else(|| path.to_string());
         panel.note = match result {
             Ok(_) => fill(t.install_done, &[("name", &name)]),
@@ -288,7 +373,8 @@ impl Shelf {
         drawer.selectable = true;
         for i in first..(first + ROWS).min(panel.list.len()) {
             let info = &panel.list[i];
-            let label = gfx.fit(Role::BodyBold, shown_name(info), 300.0);
+            let mark = if panel.marked.contains(&info.path) { "+ " } else { "" };
+            let label = gfx.fit(Role::BodyBold, &format!("{mark}{}", shown_name(info)), 300.0);
             drawer.row(gfx, &label, Some(&format_size(info.size)), None, i == panel.row, Step::None);
         }
         // What the highlighted package is, then what there is to say.
@@ -312,7 +398,7 @@ impl Shelf {
             VpkSort::Date => t.install_by_date,
             VpkSort::Size => t.install_by_size,
         };
-        drawer.hints(gfx, &[(Button::confirm(self.settings.confirm), t.choose), (Button::Face(Symbol::Square), sort), (Button::Face(Symbol::Triangle), t.install_delete), (Button::cancel(self.settings.confirm), t.back)]);
+        drawer.hints(gfx, &[(Button::confirm(self.settings.confirm), t.choose), (Button::Face(Symbol::Square), sort), (Button::Face(Symbol::Triangle), t.install_delete), (Button::ShoulderR, t.install_mark), (Button::cancel(self.settings.confirm), t.back)]);
     }
 }
 

@@ -624,6 +624,9 @@ impl Shelf {
             if pressed & TRIANGLE != 0 {
                 self.vpks_delete(host);
             }
+            if pressed & R != 0 {
+                self.vpks_mark();
+            }
         } else if self.storage.is_some() {
             self.storage_input(host, step, pressed & confirm != 0, pressed & cancel != 0);
         } else if self.rescan.is_some() {
@@ -2223,8 +2226,10 @@ mod tests {
         let rows = shelf.editor_row_list();
         assert_eq!(rows[rows.len() - 4..], [editor::Row::Folders, editor::Row::Shrink, editor::Row::Delete, editor::Row::DeleteWithData]);
         assert_eq!(editor::folders_value_for_test(&sizes), "data 1.5 GB");
-        let both = crate::host::FolderSizes { app: None, data: Some(2 * 1024 * 1024), repatch: Some(512 * 1024) };
+        let both = crate::host::FolderSizes { app: None, data: Some(2 * 1024 * 1024), repatch: Some(512 * 1024), savedata: None };
         assert_eq!(editor::folders_value_for_test(&both), "data 2.0 MB \u{b7} rePatch 0.5 MB");
+        let saves = crate::host::FolderSizes { savedata: Some(3 * 1024 * 1024), ..Default::default() };
+        assert_eq!(editor::folders_value_for_test(&saves), "saves 3.0 MB");
         // An answer for another title changes nothing.
         shelf.folders_known("OTHER0001", none);
         assert_eq!(shelf.editor.as_ref().unwrap().folders, Some(sizes));
@@ -2344,6 +2349,37 @@ mod tests {
         assert!(panel.note.contains("Alpha"), "{}", panel.note);
         shelf.vpk_deleted("ux0:install/b.vpk", true);
         assert!(shelf.vpks.as_ref().unwrap().list.is_empty());
+    }
+
+    /// Marked packages install in one run after one question; a package with a
+    /// problem cannot be marked, and a host that cannot install counts them failed.
+    #[test]
+    fn the_install_panel_runs_marked_packages_as_a_batch() {
+        use crate::host::VpkInfo;
+        let (mut shelf, mut host) = setup(true, PluginState::On);
+        shelf.open_vpks(&mut host);
+        let pkg = |file: &str, title: &str, id: &str| VpkInfo { path: format!("ux0:install/{file}"), file: file.into(), title: title.into(), title_id: id.into(), ..Default::default() };
+        let mut bad = pkg("z.vpk", "Zed", "ZEDD00001");
+        bad.problem = "no eboot.bin".into();
+        shelf.vpks_listed(&mut host, vec![pkg("a.vpk", "Alpha", "ALPH00001"), pkg("b.vpk", "Beta", "BETA00001"), bad]);
+        shelf.vpks_mark();
+        shelf.vpks_input(&mut host, Some(navigation::Step::Press(navigation::Direction::Down)), false, false, false);
+        shelf.vpks_mark();
+        assert_eq!(shelf.vpks.as_ref().unwrap().marked.len(), 2);
+        shelf.vpks_mark();
+        assert_eq!(shelf.vpks.as_ref().unwrap().marked.len(), 1);
+        shelf.vpks_mark();
+        for _ in 0..2 {
+            shelf.vpks_input(&mut host, Some(navigation::Step::Press(navigation::Direction::Down)), false, false, false);
+        }
+        shelf.vpks_mark();
+        assert_eq!(shelf.vpks.as_ref().unwrap().marked.len(), 2, "a package with a problem is not marked");
+        shelf.vpks_input(&mut host, None, true, false, false);
+        assert!(shelf.vpks.as_ref().unwrap().note.contains('2'));
+        shelf.vpks_input(&mut host, None, true, false, false);
+        let panel = shelf.vpks.as_ref().unwrap();
+        assert!(!panel.batching && panel.marked.is_empty() && panel.installing.is_none());
+        assert!(panel.note.contains("0 installed, 2 failed"), "{}", panel.note);
     }
 
     #[test]

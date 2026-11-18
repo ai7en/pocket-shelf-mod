@@ -80,7 +80,7 @@ pub fn folder_sizes(id: &str) -> shelf_core::host::FolderSizes {
         files(&folder, "", &mut found);
         Some(found.iter().map(|(_, bytes)| bytes).sum::<u64>())
     };
-    shelf_core::host::FolderSizes { app: size("ux0:app"), data: size("ux0:data"), repatch: size("ux0:rePatch") }
+    shelf_core::host::FolderSizes { app: size("ux0:app"), data: size("ux0:data"), repatch: size("ux0:rePatch"), savedata: size("ux0:user/00/savedata") }
 }
 
 fn uninstall(id: &str) -> Result<(), String> {
