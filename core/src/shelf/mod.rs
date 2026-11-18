@@ -180,6 +180,12 @@ pub struct Shelf {
     dynamic_rest: u32,
 
     status: Status,
+    /// The card's free bytes, read every 30 seconds; None before the first read.
+    free: Option<u64>,
+    /// Titles in `known.tsv` that are not installed, counted when the title list or the record changes.
+    missing: usize,
+    /// The status bar's summary text, built each second from the two above.
+    summary: String,
     frame: u32,
     now: u64,
     launching: Option<String>,
@@ -298,6 +304,9 @@ impl Shelf {
             dynamic_goal: None,
             dynamic_rest: 0,
             status,
+            free: None,
+            missing: 0,
+            summary: String::new(),
             frame: 0,
             now: 0,
             launching: None,
@@ -510,8 +519,13 @@ impl Shelf {
     pub fn update(&mut self, host: &mut dyn Host, pad: u32, now: u64, touch: &touch::TouchFrame) -> Option<Request> {
         self.now = now;
         // The status arrives with the shelf; it is read again every second.
-        if self.frame > 0 && self.frame % STATUS_EVERY == 0 && self.settings.status_bar {
+        if (self.frame > 0 && self.frame % STATUS_EVERY == 0 || self.frame == 1) && self.settings.status_bar {
             self.status = host.status();
+            // A syscall on ux0:, so it runs far less often than the clock.
+            if self.free.is_none() || self.frame % (STATUS_EVERY * 30) == 0 {
+                self.free = host.storage_space().map(|(free, _)| free);
+            }
+            self.summary = self.summary_text();
         }
         self.frame += 1;
         let mut pressed = pad & !self.previous;
@@ -901,6 +915,10 @@ impl Shelf {
                     return;
                 }
                 let order = cycle_by(&SortOrder::ALL, self.library.orders.get(&self.tab), delta);
+                // Sizes come from a measure on a host thread; the list sorts again when they arrive.
+                if matches!(order, SortOrder::LargestSize | SortOrder::SmallestSize) && !self.library.sizes_known() {
+                    host.storage_sizes();
+                }
                 self.library.orders.set(&self.tab, order);
                 // Saved in a file of its own (`sort.json`).
                 host.write(SORT_FILE, self.library.orders.render().as_bytes());
@@ -1055,6 +1073,12 @@ impl Shelf {
             }
             Item::InstallVpk => {
                 self.open_vpks(host);
+                return;
+            }
+            Item::NoCover => {
+                self.library.no_cover_only = !self.library.no_cover_only;
+                let keep = self.selected_game().map(|g| g.id.to_string());
+                self.relist(keep);
                 return;
             }
             Item::Restore => {
@@ -1394,6 +1418,7 @@ impl Shelf {
             theme: &theme,
             settings: &self.settings,
             status: &self.status,
+            summary: &self.summary,
             tabs: &self.tabs,
             current: &self.tab,
             now: self.now,
@@ -1657,6 +1682,8 @@ impl Shelf {
                     SortOrder::OldestInstalled => o.oldest_installed,
                     SortOrder::NewestReleased => o.newest_released,
                     SortOrder::OldestReleased => o.oldest_released,
+                    SortOrder::LargestSize => o.largest,
+                    SortOrder::SmallestSize => o.smallest,
                 };
                 // Search keeps the best match first: no value. Last Played
                 // shows its fixed order.
@@ -1784,6 +1811,7 @@ impl Shelf {
             Item::Storage => (t.storage, None, None, Right),
             Item::InstallVpk => (t.install_vpk, None, None, Right),
             Item::Restore => (t.restore, None, None, Right),
+            Item::NoCover => (t.no_cover_only, on_off(self.library.no_cover_only), None, Both),
             Item::ConsoleStart => (t.console_start, None, None, Right),
             // While it runs, what it reads and how far it is.
             Item::RescanTab => (t.rescan_tab, self.scan_value(), None, Right),
@@ -2073,7 +2101,7 @@ mod tests {
     fn every_menu_setting_is_saved() {
         use menu::{items, Item, PAGES};
         let (mut shelf, mut host) = setup(true, PluginState::On);
-        let actions = [Item::RescanTab, Item::FetchArt, Item::CleanArt, Item::Rescan, Item::GameDatabase, Item::CheckUpdates, Item::Diagnostics, Item::Storage, Item::InstallVpk, Item::Restore, Item::Categories, Item::ConsoleStart];
+        let actions = [Item::RescanTab, Item::FetchArt, Item::CleanArt, Item::Rescan, Item::GameDatabase, Item::CheckUpdates, Item::Diagnostics, Item::Storage, Item::InstallVpk, Item::Restore, Item::NoCover, Item::Categories, Item::ConsoleStart];
         let mut checked = 0;
         for page in PAGES {
             for (row, item) in items(page).iter().enumerate() {

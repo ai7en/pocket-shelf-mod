@@ -188,6 +188,12 @@ impl Shelf {
 
     /// The games' sizes arrived.
     pub fn storage_measured(&mut self, sizes: Vec<(String, u64)>) {
+        // The size orders use the numbers whether or not the panel is open.
+        self.library.set_sizes(&sizes);
+        if matches!(self.library.order_of(&self.tab), crate::library::order::SortOrder::LargestSize | crate::library::order::SortOrder::SmallestSize) {
+            let keep = self.selected_game().map(|g| g.id.to_string());
+            self.relist(keep);
+        }
         let Some(panel) = &mut self.storage else { return };
         panel.busy = None;
         panel.note.clear();

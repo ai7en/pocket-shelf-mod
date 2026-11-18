@@ -25,11 +25,14 @@ pub enum SortOrder {
     /// The release year the game database gives.
     NewestReleased,
     OldestReleased,
+    /// The bytes the games take on the card, from the last measure (Storage or this order's own).
+    LargestSize,
+    SmallestSize,
 }
 
 impl SortOrder {
     /// In the Sort row's order.
-    pub const ALL: [SortOrder; 10] = [
+    pub const ALL: [SortOrder; 12] = [
         SortOrder::NameAsc,
         SortOrder::NameDesc,
         SortOrder::RecentlyPlayed,
@@ -40,6 +43,8 @@ impl SortOrder {
         SortOrder::OldestInstalled,
         SortOrder::NewestReleased,
         SortOrder::OldestReleased,
+        SortOrder::LargestSize,
+        SortOrder::SmallestSize,
     ];
 
     pub fn key(self) -> &'static str {
@@ -54,6 +59,8 @@ impl SortOrder {
             SortOrder::OldestInstalled => "installed-oldest",
             SortOrder::NewestReleased => "released-newest",
             SortOrder::OldestReleased => "released-oldest",
+            SortOrder::LargestSize => "size-largest",
+            SortOrder::SmallestSize => "size-smallest",
         }
     }
 
@@ -103,6 +110,8 @@ pub struct Facts {
     pub system: Option<SystemDates>,
     /// The release year from the game database; 0 when unknown.
     pub year: u16,
+    /// Bytes on the card; 0 until a measure has run.
+    pub bytes: u64,
 }
 
 impl Facts {
@@ -138,6 +147,18 @@ pub fn sort(list: &mut [usize], order: SortOrder, facts: impl Fn(usize) -> Facts
             } else {
                 keyed.sort_by(|a, b| a.0.cmp(&b.0));
             }
+            write_back(list, keyed);
+        }
+        SortOrder::LargestSize | SortOrder::SmallestSize => {
+            let mut keyed: Vec<(Option<u64>, usize)> = list.iter().map(|&i| (Some(facts(i).bytes).filter(|&b| b > 0), i)).collect();
+            let largest = order == SortOrder::LargestSize;
+            keyed.sort_by(|a, b| match (a.0, b.0) {
+                (Some(x), Some(y)) if largest => y.cmp(&x),
+                (Some(x), Some(y)) => x.cmp(&y),
+                (Some(_), None) => std::cmp::Ordering::Less,
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (None, None) => std::cmp::Ordering::Equal,
+            });
             write_back(list, keyed);
         }
         SortOrder::NewestInstalled | SortOrder::OldestInstalled | SortOrder::NewestReleased | SortOrder::OldestReleased => {
@@ -211,6 +232,7 @@ mod tests {
                 },
             }),
             year: [1991, 0, 1989, 1991, 1995][i],
+            bytes: [500, 0, 100, 900, 100][i],
         };
         let sorted = |order| {
             let mut list = vec![0, 1, 2, 3, 4];
@@ -228,5 +250,8 @@ mod tests {
         // 1 has no year: last both ways; a tie keeps name order.
         assert_eq!(sorted(SortOrder::NewestReleased), [4, 0, 3, 2, 1]);
         assert_eq!(sorted(SortOrder::OldestReleased), [2, 0, 3, 4, 1]);
+        // 1 has no size: last both ways; the tie of 2 and 4 keeps name order.
+        assert_eq!(sorted(SortOrder::LargestSize), [3, 0, 2, 4, 1]);
+        assert_eq!(sorted(SortOrder::SmallestSize), [2, 4, 0, 3, 1]);
     }
 }

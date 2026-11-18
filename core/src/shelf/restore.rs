@@ -85,6 +85,7 @@ impl Shelf {
         if merge(ledger, installed) {
             host.write(LEDGER_FILE, render(ledger).as_bytes());
         }
+        self.recount_missing();
     }
 
     /// Take a title out of the record (forgotten, or deleted here on purpose).
@@ -95,6 +96,24 @@ impl Shelf {
         if ledger.len() != before {
             host.write(LEDGER_FILE, render(ledger).as_bytes());
         }
+        self.recount_missing();
+    }
+
+    /// The status bar's text: `12.3 GB free`, then `2 missing` when titles are to reinstall.
+    pub(super) fn summary_text(&self) -> String {
+        let t = self.t();
+        let Some(free) = self.free else { return String::new() };
+        let mut text = fill(t.summary_free, &[("free", &super::editor::format_size(free))]);
+        if self.missing > 0 {
+            text.push_str(" \u{b7} ");
+            text.push_str(&fill(t.summary_missing, &[("count", &self.missing.to_string())]));
+        }
+        text
+    }
+
+    /// Count the titles to reinstall again; called when the list or the record changed.
+    fn recount_missing(&mut self) {
+        self.missing = self.to_reinstall_count();
     }
 
     /// The titles to reinstall: id and name.

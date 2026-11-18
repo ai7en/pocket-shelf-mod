@@ -70,6 +70,8 @@ pub struct HeaderInput<'a> {
     pub theme: &'a Theme,
     pub settings: &'a Settings,
     pub status: &'a Status,
+    /// The card's free space and what is missing, shown before the status items; empty hides it.
+    pub summary: &'a str,
     pub tabs: &'a [Category],
     pub current: &'a str,
     pub now: u64,
@@ -102,7 +104,7 @@ impl Header {
         self.measure(gfx, input.tabs);
         // The status items take the width of the ones shown (and 6 apart
         // from L or R); the names have the rest.
-        let items = if input.settings.status_bar { status_parts(gfx, input.settings, input.status) } else { Vec::new() };
+        let items = if input.settings.status_bar { status_parts(gfx, input.settings, input.status, input.summary) } else { Vec::new() };
         let items_w = parts_width(&items);
         let status_w = if items.is_empty() { 0.0 } else { items_w + 12.0 };
         let left = input.settings.layout.position == StatusPosition::Left;
@@ -194,6 +196,7 @@ fn shoulder(gfx: &mut Gfx, left: bool, x: f32, y: f32) {
 /// A status item shown in the top bar.
 #[derive(Clone, PartialEq, Debug)]
 enum Part {
+    Summary(String),
     Wifi(u8),
     Bluetooth,
     Battery(u8),
@@ -203,9 +206,13 @@ enum Part {
 /// The status items to show, with their widths: Wi-Fi, Bluetooth, the
 /// battery and the time, each when the layout shows it and the host could
 /// read it (Wi-Fi only while connected, Bluetooth only while on).
-fn status_parts(gfx: &mut Gfx, settings: &Settings, status: &Status) -> Vec<(Part, f32)> {
+fn status_parts(gfx: &mut Gfx, settings: &Settings, status: &Status, summary: &str) -> Vec<(Part, f32)> {
     let layout = &settings.layout;
     let mut parts = Vec::new();
+    if !summary.is_empty() {
+        let width = gfx.measure(Role::BodyBold, summary);
+        parts.push((Part::Summary(summary.to_string()), width));
+    }
     if let Some(wifi) = status.wifi.filter(|&w| w > 0 && layout.wifi) {
         parts.push((Part::Wifi(wifi_level(wifi)), 24.0));
     }
@@ -243,6 +250,10 @@ fn draw_parts(gfx: &mut Gfx, theme: &Theme, settings: &Settings, status: &Status
             }
             Part::Bluetooth => gfx.icon(Icon::Bluetooth, x, cy - 12.0, theme.text),
             Part::Battery(percent) => battery(gfx, theme, settings.battery_percent, *percent, status.charging, x, cy - 12.0),
+            Part::Summary(text) => {
+                let baseline = (cy - gfx.line_height(Role::BodyBold) / 2.0 + gfx.ascent(Role::BodyBold)).round();
+                gfx.text(Role::BodyBold, x, baseline, theme.text, text);
+            }
             Part::Clock(clock) => {
                 let baseline = (cy - gfx.line_height(Role::BodyBold) / 2.0 + gfx.ascent(Role::BodyBold)).round();
                 gfx.text(Role::BodyBold, x, baseline, theme.text, clock);

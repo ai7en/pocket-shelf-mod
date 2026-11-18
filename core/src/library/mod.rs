@@ -107,6 +107,10 @@ pub struct Library {
     system: FxHashMap<String, SystemDates>,
     /// Each tab's order (`sort.json`).
     pub orders: SortOrders,
+    /// Bytes per title id from the last measure; empty before one.
+    sizes: FxHashMap<String, u64>,
+    /// Lists only the games without box art; not saved, so a start shows every game.
+    pub no_cover_only: bool,
     /// The open search's term; empty when no search is open.
     pub search_term: String,
     /// The console tabs of retro games stay out of the tab bar (`retro-view.json`).
@@ -151,6 +155,8 @@ impl Library {
             recent,
             plays,
             system: FxHashMap::default(),
+            sizes: FxHashMap::default(),
+            no_cover_only: false,
             orders,
             search_term: String::new(),
             hide_consoles: false,
@@ -467,9 +473,22 @@ impl Library {
         order::sort(&mut list, self.orders.get(id), |i| {
             let game = &self.games[i];
             let id: &str = &game.id;
-            Facts { play: self.plays.get(id).copied(), system: self.system.get(id).copied(), year: game.year() }
+            Facts { play: self.plays.get(id).copied(), system: self.system.get(id).copied(), year: game.year(), bytes: self.sizes.get(id).copied().unwrap_or(0) }
         });
+        if self.no_cover_only {
+            list.retain(|&i| self.games[i].art.is_none());
+        }
         list
+    }
+
+    /// Every game's bytes, from a measure.
+    pub fn set_sizes(&mut self, sizes: &[(String, u64)]) {
+        self.sizes = sizes.iter().cloned().collect();
+    }
+
+    /// Whether a measure has run.
+    pub fn sizes_known(&self) -> bool {
+        !self.sizes.is_empty()
     }
 
     /// Whether a tab can be sorted: Search keeps the best match first and
