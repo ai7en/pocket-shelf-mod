@@ -24,6 +24,7 @@ pub mod pspemu;
 pub mod emu4vita;
 pub mod folders;
 pub mod gamework;
+pub mod storage;
 pub mod retroarch;
 pub mod seplugins;
 pub mod shrink;

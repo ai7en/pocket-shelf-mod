@@ -13,6 +13,7 @@ pub mod menu;
 pub mod navigation;
 pub mod panel;
 mod database;
+mod storage;
 mod tools;
 mod update;
 mod online;
@@ -209,6 +210,8 @@ pub struct Shelf {
     /// A picker confirm that waited for its file to decode, now due.
     pending_picker_confirm: bool,
     rescan: Option<tools::Rescan>,
+    /// SELECT ▸ System ▸ Storage.
+    storage: Option<storage::Storage>,
     database: Option<database::DatabaseRun>,
     fetch: Option<artwork::FetchPanel>,
     /// Pictures Fetch artwork applied since the title changes were written.
@@ -306,6 +309,7 @@ impl Shelf {
             categories: None,
             pending_picker_confirm: false,
             rescan: None,
+            storage: None,
             database: None,
             fetch: None,
             fetch_unsaved: 0,
@@ -579,6 +583,8 @@ impl Shelf {
             self.cleanup_input(host, step, pressed & confirm != 0, pressed & cancel != 0);
         } else if self.console_start.is_some() {
             self.console_start_input(host, step, pressed & confirm != 0, pressed & cancel != 0);
+        } else if self.storage.is_some() {
+            self.storage_input(host, step, pressed & confirm != 0, pressed & cancel != 0);
         } else if self.rescan.is_some() {
             self.rescan_input(host, pressed & confirm != 0, pressed & cancel != 0);
         } else if self.database.is_some() {
@@ -1024,6 +1030,10 @@ impl Shelf {
                 self.open_diagnostics();
                 return;
             }
+            Item::Storage => {
+                self.open_storage(host);
+                return;
+            }
             Item::ConsoleStart => {
                 self.open_console_start(host);
                 return;
@@ -1402,6 +1412,9 @@ impl Shelf {
         if self.rescan.is_some() {
             self.draw_rescan(gfx);
         }
+        if self.storage.is_some() {
+            self.draw_storage(gfx);
+        }
         if self.database.is_some() {
             self.draw_database(gfx);
         }
@@ -1734,6 +1747,7 @@ impl Shelf {
             }
             Item::RetroConsoles => (t.retro_consoles, on_off(!s.retro_view.hide_consoles), None, Both),
             Item::Diagnostics => (t.diagnostics, None, None, Right),
+            Item::Storage => (t.storage, None, None, Right),
             Item::ConsoleStart => (t.console_start, None, None, Right),
             // While it runs, what it reads and how far it is.
             Item::RescanTab => (t.rescan_tab, self.scan_value(), None, Right),
@@ -2023,7 +2037,7 @@ mod tests {
     fn every_menu_setting_is_saved() {
         use menu::{items, Item, PAGES};
         let (mut shelf, mut host) = setup(true, PluginState::On);
-        let actions = [Item::RescanTab, Item::FetchArt, Item::CleanArt, Item::Rescan, Item::GameDatabase, Item::CheckUpdates, Item::Diagnostics, Item::Categories, Item::ConsoleStart];
+        let actions = [Item::RescanTab, Item::FetchArt, Item::CleanArt, Item::Rescan, Item::GameDatabase, Item::CheckUpdates, Item::Diagnostics, Item::Storage, Item::Categories, Item::ConsoleStart];
         let mut checked = 0;
         for page in PAGES {
             for (row, item) in items(page).iter().enumerate() {
@@ -2130,16 +2144,57 @@ mod tests {
         let none = crate::host::FolderSizes::default();
         shelf.folders_known("PCSA00069", none);
         assert!(!shelf.editor_row_list().contains(&editor::Row::Folders));
-        let sizes = crate::host::FolderSizes { data: Some(3 * 1024 * 1024 * 1024 / 2), repatch: None };
+        let sizes = crate::host::FolderSizes { data: Some(3 * 1024 * 1024 * 1024 / 2), ..Default::default() };
         shelf.folders_known("PCSA00069", sizes);
         let rows = shelf.editor_row_list();
         assert_eq!(rows[rows.len() - 4..], [editor::Row::Folders, editor::Row::Shrink, editor::Row::Delete, editor::Row::DeleteWithData]);
         assert_eq!(editor::folders_value_for_test(&sizes), "data 1.5 GB");
-        let both = crate::host::FolderSizes { data: Some(2 * 1024 * 1024), repatch: Some(512 * 1024) };
+        let both = crate::host::FolderSizes { app: None, data: Some(2 * 1024 * 1024), repatch: Some(512 * 1024) };
         assert_eq!(editor::folders_value_for_test(&both), "data 2.0 MB \u{b7} rePatch 0.5 MB");
         // An answer for another title changes nothing.
         shelf.folders_known("OTHER0001", none);
         assert_eq!(shelf.editor.as_ref().unwrap().folders, Some(sizes));
+    }
+
+    /// SELECT ▸ System ▸ Storage: findings are listed after the jobs, Clean
+    /// asks twice and only for what can be removed, and a host that cannot
+    /// run a job says so.
+    #[test]
+    fn the_storage_panel_asks_twice_before_it_cleans() {
+        use crate::host::{Leftover, LeftoverKind};
+        let (mut shelf, mut host) = setup(true, PluginState::On);
+        shelf.open_storage(&mut host);
+        let empty = Leftover { id: "AAAA00001".into(), kind: LeftoverKind::EmptyApp, bytes: 1 };
+        let data = Leftover { id: "BBBB00002".into(), kind: LeftoverKind::Data, bytes: 2 };
+        shelf.storage_checked(vec![empty, data.clone()]);
+        assert_eq!(shelf.storage.as_ref().unwrap().count(), 7, "five fixed rows and two findings");
+        shelf.storage.as_mut().unwrap().row = 2;
+        shelf.storage_input(&mut host, None, true, false);
+        let panel = shelf.storage.as_ref().unwrap();
+        assert_eq!(panel.armed, Some(storage::Action::Clean));
+        assert!(panel.note.contains('1'), "{}", panel.note);
+        shelf.storage_input(&mut host, None, true, false);
+        let panel = shelf.storage.as_ref().unwrap();
+        assert_eq!((panel.armed, panel.busy), (None, None));
+        assert_eq!(panel.note, shelf.t().storage_failed, "the test host cannot clean");
+        // Data is only listed: with nothing else found, Clean has nothing to do.
+        shelf.storage_checked(vec![data]);
+        shelf.storage_input(&mut host, None, true, false);
+        let panel = shelf.storage.as_ref().unwrap();
+        assert_eq!(panel.armed, None);
+        assert_eq!(panel.note, shelf.t().storage_none);
+        // The answers of the other jobs clear what they made out of date.
+        shelf.storage_measured(vec![("CCCC00003".into(), 5)]);
+        assert_eq!(shelf.storage.as_ref().unwrap().count(), 5 + 1 + 1);
+        shelf.storage_shrunk(2, 3 * 1024 * 1024);
+        let panel = shelf.storage.as_ref().unwrap();
+        assert!(panel.sizes.is_none());
+        assert!(panel.note.contains("3.0 MB"), "{}", panel.note);
+        shelf.storage_cleaned(1, 0);
+        assert!(shelf.storage.as_ref().unwrap().found.is_none());
+        // Back closes it.
+        shelf.storage_input(&mut host, None, false, true);
+        assert!(shelf.storage.is_none());
     }
 
     #[test]

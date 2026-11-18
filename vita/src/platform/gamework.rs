@@ -40,7 +40,7 @@ pub fn end() {
 
 /// A title id is nine ASCII letters or digits (`PCSA00069`, `VITASHELL`);
 /// anything else never becomes part of a path here.
-fn valid_id(id: &str) -> bool {
+pub(super) fn valid_id(id: &str) -> bool {
     id.len() == 9 && id.bytes().all(|b| b.is_ascii_alphanumeric())
 }
 
@@ -67,7 +67,7 @@ pub fn run(id: &str, work: GameWork) -> Result<u64, String> {
     }
 }
 
-/// The bytes in `ux0:data/<id>` and `ux0:rePatch/<id>`, `None` for a folder
+/// The bytes in `ux0:app/<id>`, `ux0:data/<id>` and `ux0:rePatch/<id>`, `None` for a folder
 /// that does not exist. Walks every file: worker thread only.
 pub fn folder_sizes(id: &str) -> shelf_core::host::FolderSizes {
     if !valid_id(id) {
@@ -80,7 +80,7 @@ pub fn folder_sizes(id: &str) -> shelf_core::host::FolderSizes {
         files(&folder, "", &mut found);
         Some(found.iter().map(|(_, bytes)| bytes).sum::<u64>())
     };
-    shelf_core::host::FolderSizes { data: size("ux0:data"), repatch: size("ux0:rePatch") }
+    shelf_core::host::FolderSizes { app: size("ux0:app"), data: size("ux0:data"), repatch: size("ux0:rePatch") }
 }
 
 fn uninstall(id: &str) -> Result<(), String> {
@@ -102,7 +102,7 @@ fn uninstall(id: &str) -> Result<(), String> {
 }
 
 /// The files under `dir` as `(path relative to base, size)`, folders walked.
-fn files(base: &str, rel: &str, out: &mut Vec<(String, u64)>) {
+pub(super) fn files(base: &str, rel: &str, out: &mut Vec<(String, u64)>) {
     let dir = if rel.is_empty() { base.to_string() } else { format!("{base}/{rel}") };
     let Ok(entries) = fs::read_dir(&dir) else { return };
     for entry in entries.flatten() {

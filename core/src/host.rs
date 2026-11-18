@@ -181,14 +181,45 @@ pub struct CoreList {
     pub cores: Vec<String>,
 }
 
-/// The bytes in a game's folders beside `ux0:app`, from [`Host::folder_sizes`];
+/// The bytes in a game's folders in `app`, `data` and `rePatch`, from [`Host::folder_sizes`];
 /// `None` where the folder does not exist.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct FolderSizes {
+    /// `ux0:app/<id>`.
+    pub app: Option<u64>,
     /// `ux0:data/<id>`.
     pub data: Option<u64>,
     /// `ux0:rePatch/<id>`.
     pub repatch: Option<u64>,
+}
+
+/// What a storage check found beside the installed games.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum LeftoverKind {
+    /// `ux0:app/<id>` without an `eboot.bin`: an install that did not finish
+    /// or lost its files. The system lists it and does not start it.
+    EmptyApp,
+    /// `ux0:patch/<id>` or `ux0:rePatch/<id>` of a title that is not installed.
+    Patch,
+    /// `ux0:data/<id>` of a title that is not installed. It may hold saves,
+    /// so it is listed and never removed here.
+    Data,
+}
+
+impl LeftoverKind {
+    /// Whether "Remove leftovers" deletes it.
+    pub fn removable(self) -> bool {
+        matches!(self, LeftoverKind::EmptyApp | LeftoverKind::Patch)
+    }
+}
+
+/// One finding of [`Host::storage_check`].
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Leftover {
+    pub id: String,
+    pub kind: LeftoverKind,
+    /// The bytes in its folder(s).
+    pub bytes: u64,
 }
 
 /// A folder's entry, as [`Host::list_folder`] answers it.
@@ -298,6 +329,15 @@ pub enum Event {
     Cores(String, Vec<CoreList>),
     /// [`Host::folder_sizes`] finished for this title.
     Folders(String, FolderSizes),
+    /// [`Host::storage_check`] finished.
+    StorageChecked(Vec<Leftover>),
+    /// [`Host::storage_clean`] finished: folders removed, folders that stayed.
+    StorageCleaned(u32, u32),
+    /// [`Host::storage_sizes`] finished: every installed game's bytes in
+    /// `ux0:app`, largest first.
+    StorageSizes(Vec<(String, u64)>),
+    /// [`Host::storage_shrink_all`] finished: games that lost files, bytes freed.
+    StorageShrunk(u32, u64),
     /// [`Host::game_work`] finished: the bytes freed, or the reason it
     /// failed.
     GameWork(String, GameWork, Result<u64, String>),
@@ -554,6 +594,36 @@ pub trait Host {
     /// game, on a worker thread (a folder holds thousands of files);
     /// answered with [`Event::Folders`]. False when this host cannot.
     fn folder_sizes(&mut self, _id: &str) -> bool {
+        false
+    }
+
+    /// The memory card's free and total bytes (`ux0:`); None when this host
+    /// cannot tell. A system call, not a file read.
+    fn storage_space(&mut self) -> Option<(u64, u64)> {
+        None
+    }
+
+    /// Look for [`Leftover`]s on a worker thread; answered with
+    /// [`Event::StorageChecked`]. False when this host cannot.
+    fn storage_check(&mut self) -> bool {
+        false
+    }
+
+    /// Remove the folders of these removable findings on a worker thread;
+    /// answered with [`Event::StorageCleaned`]. False when it cannot start.
+    fn storage_clean(&mut self, _targets: Vec<(String, LeftoverKind)>) -> bool {
+        false
+    }
+
+    /// Measure every installed game's folder on a worker thread; answered
+    /// with [`Event::StorageSizes`].
+    fn storage_sizes(&mut self) -> bool {
+        false
+    }
+
+    /// Shrink each of these games (as the editor's Shrink does) one after
+    /// the other on a worker thread; answered with [`Event::StorageShrunk`].
+    fn storage_shrink_all(&mut self, _ids: Vec<String>) -> bool {
         false
     }
 

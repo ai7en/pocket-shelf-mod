@@ -191,6 +191,26 @@ impl App {
                         shelf.cores_listed(&id, lists);
                     }
                 }
+                Event::StorageChecked(found) => {
+                    if let Some(shelf) = &mut self.shelf {
+                        shelf.storage_checked(found);
+                    }
+                }
+                Event::StorageCleaned(removed, failed) => {
+                    if let Some(shelf) = &mut self.shelf {
+                        shelf.storage_cleaned(removed, failed);
+                    }
+                }
+                Event::StorageSizes(sizes) => {
+                    if let Some(shelf) = &mut self.shelf {
+                        shelf.storage_measured(sizes);
+                    }
+                }
+                Event::StorageShrunk(games, freed) => {
+                    if let Some(shelf) = &mut self.shelf {
+                        shelf.storage_shrunk(games, freed);
+                    }
+                }
                 Event::Folders(id, sizes) => {
                     if let Some(shelf) = &mut self.shelf {
                         shelf.folders_known(&id, sizes);

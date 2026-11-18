@@ -66,7 +66,7 @@ pub(super) fn editor_rows(game: &crate::library::catalog::Game, cores: bool, fol
 }
 
 /// A size as one decimal in MB or GB (`12.3 MB`).
-fn format_size(bytes: u64) -> String {
+pub(super) fn format_size(bytes: u64) -> String {
     let mb = bytes as f64 / (1024.0 * 1024.0);
     if mb >= 1024.0 {
         format!("{:.1} GB", mb / 1024.0)
@@ -75,10 +75,13 @@ fn format_size(bytes: u64) -> String {
     }
 }
 
-/// The Folders row's value: `data 1.2 GB · rePatch 340.0 MB`, each part only
+/// The Folders row's value: `app 3.2 GB · data 1.2 GB · rePatch 340.0 MB`, each part only
 /// when that folder exists. The folders keep their names on disk.
 fn folders_value(sizes: &crate::host::FolderSizes) -> String {
     let mut parts = Vec::new();
+    if let Some(bytes) = sizes.app {
+        parts.push(format!("app {}", format_size(bytes)));
+    }
     if let Some(bytes) = sizes.data {
         parts.push(format!("data {}", format_size(bytes)));
     }
@@ -256,7 +259,7 @@ impl Shelf {
     /// The edited title's rows; none when no title is edited.
     pub(super) fn editor_row_list(&self) -> Vec<Row> {
         let cores = self.editor_cores().is_some_and(|list| list.cores.len() > 1);
-        let folders = self.editor.as_ref().and_then(|e| e.folders).is_some_and(|f| f.data.is_some() || f.repatch.is_some());
+        let folders = self.editor.as_ref().and_then(|e| e.folders).is_some_and(|f| f.app.is_some() || f.data.is_some() || f.repatch.is_some());
         self.editor_game().map(|game| editor_rows(&game, cores, folders)).unwrap_or_default()
     }
 
@@ -445,6 +448,15 @@ impl Shelf {
         if editor.armed != Some(row) {
             editor.armed = Some(row);
             editor.note = fill(ask, &[("name", &game.title)]);
+            // What the work frees, when the host has measured the folders.
+            let freed = editor.folders.map_or(0, |f| match work {
+                GameWork::Shrink => 0,
+                GameWork::Delete => f.app.unwrap_or(0),
+                GameWork::DeleteWithData => f.app.unwrap_or(0) + f.data.unwrap_or(0) + f.repatch.unwrap_or(0),
+            });
+            if freed > 0 {
+                editor.note = format!("{} ({})", editor.note, format_size(freed));
+            }
             return;
         }
         editor.armed = None;

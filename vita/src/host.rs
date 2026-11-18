@@ -273,6 +273,22 @@ impl Drop for VitaHost {
 }
 
 impl VitaHost {
+    /// A storage job on a worker thread, one at a time with the game jobs
+    /// (`gamework`); false while another runs.
+    fn storage_job(&self, name: &'static str, run: impl FnOnce(&Sender<Event>) + Send + 'static) -> bool {
+        if !crate::platform::gamework::begin() {
+            return false;
+        }
+        let sender = self.answer_sender.clone();
+        spawn("shelf-storage", move || {
+            let started = now_us();
+            run(&sender);
+            log_line(&format!("storage {name}: {} ms", (now_us() - started) / 1000));
+            crate::platform::gamework::end();
+        });
+        true
+    }
+
     pub fn new() -> Self {
         let (answer_sender, answers) = channel();
         let requests = Arc::new(Requests::default());
@@ -609,6 +625,38 @@ impl Host for VitaHost {
             let _ = sender.send(Event::Folders(id, sizes));
         });
         true
+    }
+
+    fn storage_space(&mut self) -> Option<(u64, u64)> {
+        crate::platform::storage::space()
+    }
+
+    fn storage_check(&mut self) -> bool {
+        self.storage_job("check", |sender| {
+            let found = crate::platform::storage::check();
+            let _ = sender.send(Event::StorageChecked(found));
+        })
+    }
+
+    fn storage_clean(&mut self, targets: Vec<(String, shelf_core::host::LeftoverKind)>) -> bool {
+        self.storage_job("clean", move |sender| {
+            let (removed, stayed) = crate::platform::storage::clean(&targets);
+            let _ = sender.send(Event::StorageCleaned(removed, stayed));
+        })
+    }
+
+    fn storage_sizes(&mut self) -> bool {
+        self.storage_job("sizes", |sender| {
+            let sizes = crate::platform::storage::sizes();
+            let _ = sender.send(Event::StorageSizes(sizes));
+        })
+    }
+
+    fn storage_shrink_all(&mut self, ids: Vec<String>) -> bool {
+        self.storage_job("shrink all", move |sender| {
+            let (games, freed) = crate::platform::storage::shrink_all(&ids);
+            let _ = sender.send(Event::StorageShrunk(games, freed));
+        })
     }
 
     fn game_work(&mut self, id: &str, work: shelf_core::host::GameWork) -> bool {

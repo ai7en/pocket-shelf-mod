@@ -890,8 +890,41 @@ impl Host for FakeHost {
 
     fn folder_sizes(&mut self, id: &str) -> bool {
         // What the renders show: a game with both folders.
-        let sizes = shelf_core::host::FolderSizes { data: Some(1_288_490_189), repatch: Some(356_515_840) };
+        let sizes = shelf_core::host::FolderSizes { app: Some(3_435_973_836), data: Some(1_288_490_189), repatch: Some(356_515_840) };
         self.later.push(Event::Folders(id.to_string(), sizes));
+        true
+    }
+
+    fn storage_space(&mut self) -> Option<(u64, u64)> {
+        Some((92 * 1024 * 1024 * 1024, 238 * 1024 * 1024 * 1024))
+    }
+
+    fn storage_check(&mut self) -> bool {
+        use shelf_core::host::{Leftover, LeftoverKind};
+        let mb = 1024 * 1024;
+        let found = vec![
+            Leftover { id: "SMGV00001".into(), kind: LeftoverKind::EmptyApp, bytes: 3 * mb },
+            Leftover { id: "PCSB00581".into(), kind: LeftoverKind::Patch, bytes: 180 * mb },
+            Leftover { id: "PCSE00120".into(), kind: LeftoverKind::Data, bytes: 41 * mb },
+        ];
+        self.later.push(Event::StorageChecked(found));
+        true
+    }
+
+    fn storage_clean(&mut self, targets: Vec<(String, shelf_core::host::LeftoverKind)>) -> bool {
+        self.later.push(Event::StorageCleaned(targets.len() as u32, 0));
+        true
+    }
+
+    fn storage_sizes(&mut self) -> bool {
+        let gb = 1024 * 1024 * 1024;
+        let sizes = vec![("PCSE00120".to_string(), 3 * gb), ("PCSB00581".to_string(), gb), ("VITASHELL".to_string(), 6 * 1024 * 1024)];
+        self.later.push(Event::StorageSizes(sizes));
+        true
+    }
+
+    fn storage_shrink_all(&mut self, ids: Vec<String>) -> bool {
+        self.later.push(Event::StorageShrunk(ids.len() as u32, 212 * 1024 * 1024 * ids.len() as u64));
         true
     }
 
