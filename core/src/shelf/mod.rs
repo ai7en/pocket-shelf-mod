@@ -2238,6 +2238,33 @@ mod tests {
         assert_eq!(shelf.editor.as_ref().unwrap().folders, Some(sizes));
     }
 
+    /// The question before a delete names the folders that go.
+    #[test]
+    fn the_delete_question_lists_the_folders() {
+        let (mut shelf, mut host) = setup(true, PluginState::On);
+        shelf.apply_search("PCSA00069");
+        press(&mut shelf, &mut host, TRIANGLE);
+        let sizes = crate::host::FolderSizes { app: Some(1024), data: Some(2048), repatch: Some(4096), savedata: Some(8192) };
+        shelf.folders_known("PCSA00069", sizes);
+        let go_to = |shelf: &mut Shelf, row: editor::Row| {
+            let rows = shelf.editor_row_list();
+            shelf.editor.as_mut().unwrap().row = rows.iter().position(|r| *r == row).unwrap();
+        };
+        go_to(&mut shelf, editor::Row::Delete);
+        press(&mut shelf, &mut host, CIRCLE);
+        let note = shelf.editor.as_ref().unwrap().note.clone();
+        assert!(note.contains("ux0:app/PCSA00069") && !note.contains("ux0:data/"), "{note}");
+        go_to(&mut shelf, editor::Row::DeleteWithData);
+        press(&mut shelf, &mut host, CIRCLE);
+        let note = shelf.editor.as_ref().unwrap().note.clone();
+        assert!(note.contains("ux0:app/PCSA00069") && note.contains("ux0:data/PCSA00069") && note.contains("ux0:rePatch/PCSA00069"), "{note}");
+        assert!(!note.contains("savedata"), "saves are never removed: {note}");
+        // A shrink names no folder.
+        go_to(&mut shelf, editor::Row::Shrink);
+        press(&mut shelf, &mut host, CIRCLE);
+        assert!(!shelf.editor.as_ref().unwrap().note.contains("ux0:"));
+    }
+
     /// SELECT ▸ System ▸ Storage: findings are listed after the jobs, Clean
     /// asks twice and only for what can be removed, and a host that cannot
     /// run a job says so.

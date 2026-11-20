@@ -20,6 +20,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use shelf_core::host::GameWork;
 
+use crate::host::log_line;
+
 /// Where the files a patch replaces can be, beside `ux0:app`.
 const PATCH_ROOTS: [&str; 2] = ["ux0:patch", "ux0:rePatch"];
 /// Paths of the base game that stay, whatever a patch holds.
@@ -52,19 +54,32 @@ pub fn run(id: &str, work: GameWork) -> Result<u64, String> {
     if id == super::installed::SELF_TITLE_ID {
         return Err(String::from("this app"));
     }
-    match work {
+    // Each step goes to the log before it runs, so a hang or a power-off
+    // leaves the last step in the file.
+    log_line(&format!("game work {work:?} {id}: start"));
+    let result = match work {
         GameWork::Shrink => shrink(id),
         GameWork::Delete => uninstall(id).map(|()| 0),
         GameWork::DeleteWithData => {
             uninstall(id)?;
             for folder in [format!("ux0:data/{id}"), format!("ux0:rePatch/{id}")] {
                 if fs::metadata(&folder).is_ok() {
-                    fs::remove_dir_all(&folder).map_err(|_| format!("remove {folder}"))?;
+                    log_line(&format!("game work {work:?} {id}: removing {folder}"));
+                    let removed = fs::remove_dir_all(&folder);
+                    log_line(&format!("game work {work:?} {id}: {folder} -> {}", if removed.is_ok() { "removed" } else { "failed" }));
+                    removed.map_err(|_| format!("remove {folder}"))?;
+                } else {
+                    log_line(&format!("game work {work:?} {id}: {folder} not there"));
                 }
             }
             Ok(0)
         }
+    };
+    match &result {
+        Ok(bytes) => log_line(&format!("game work {work:?} {id}: done, {bytes} bytes freed")),
+        Err(error) => log_line(&format!("game work {work:?} {id}: failed: {error}")),
     }
+    result
 }
 
 /// The bytes in `ux0:app/<id>`, `ux0:data/<id>` and `ux0:rePatch/<id>`, `None` for a folder
@@ -86,9 +101,12 @@ pub fn folder_sizes(id: &str) -> shelf_core::host::FolderSizes {
 fn uninstall(id: &str) -> Result<(), String> {
     let name = CString::new(id).map_err(|_| String::from("title id"))?;
     unsafe {
+        log_line(&format!("game work {id}: closing the app"));
         super::installed::close_app(&name);
         let _promoter = super::update::Promoter::open()?;
+        log_line(&format!("game work {id}: uninstalling through the promoter"));
         let code = vitasdk_sys::scePromoterUtilityDeletePkg(name.as_ptr());
+        log_line(&format!("game work {id}: promoter returned 0x{:08x}", code as u32));
         if code < 0 {
             return Err(format!("uninstall 0x{:08x}", code as u32));
         }

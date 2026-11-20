@@ -460,6 +460,25 @@ impl Shelf {
             if freed > 0 {
                 editor.note = format!("{} ({})", editor.note, format_size(freed));
             }
+            // The folders the work removes, by path.
+            if let Some(f) = editor.folders.filter(|_| work != GameWork::Shrink) {
+                let id = &game.id;
+                let mut paths = Vec::new();
+                if f.app.is_some() {
+                    paths.push(format!("ux0:app/{id}"));
+                }
+                if work == GameWork::DeleteWithData {
+                    if f.data.is_some() {
+                        paths.push(format!("ux0:data/{id}"));
+                    }
+                    if f.repatch.is_some() {
+                        paths.push(format!("ux0:rePatch/{id}"));
+                    }
+                }
+                if !paths.is_empty() {
+                    editor.note = format!("{}: {}", editor.note, paths.join(", "));
+                }
+            }
             return;
         }
         editor.armed = None;
