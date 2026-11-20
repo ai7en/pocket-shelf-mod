@@ -18,6 +18,13 @@ use crate::i18n::{fill, upper};
 use crate::shapes::Symbol;
 use crate::text::Role;
 
+/// `on` or `off`: whether the shelf fetches the VitaDB list once a session, 45 s
+/// after the start, while Wi-Fi is up. A file of its own; off when missing.
+pub const VITADB_CHECK_FILE: &str = "vitadb-check.txt";
+/// Seconds after the start before the automatic fetch, so the first scan and
+/// the first frames are not competing with the network.
+const CHECK_AFTER: u32 = 45;
+
 /// Rows shown at once.
 const ROWS: usize = 6;
 
@@ -75,6 +82,19 @@ impl Shelf {
             .collect();
         rows.sort_by_key(|(app, kind)| (*kind == Kind::Missing, app.name.to_lowercase()));
         rows
+    }
+
+    /// Once a second: fetch the list by itself when the setting is on, Wi-Fi is up
+    /// and no fetch has run this session. The answer arrives as `Event::Catalog`
+    /// and sets the update count in the summary.
+    pub(super) fn auto_check_catalog(&mut self, host: &mut dyn Host) {
+        let on = *self.vitadb_check.get_or_insert_with(|| host.read(VITADB_CHECK_FILE).is_some_and(|bytes| bytes.starts_with(b"on")));
+        if !on || self.catalog_asked || self.catalog_list.is_some() || self.frame < super::STATUS_EVERY * CHECK_AFTER {
+            return;
+        }
+        if host.status().wifi.is_some_and(|signal| signal > 0) && host.catalog_fetch() {
+            self.catalog_asked = true;
+        }
     }
 
     pub(super) fn catalog_row_count(&self) -> usize {

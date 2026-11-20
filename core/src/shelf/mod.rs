@@ -13,7 +13,7 @@ pub mod menu;
 pub mod navigation;
 pub mod panel;
 mod database;
-mod catalog;
+pub mod catalog;
 pub mod restore;
 mod storage;
 mod tools;
@@ -235,6 +235,10 @@ pub struct Shelf {
     catalog_list: Option<Vec<crate::host::CatalogApp>>,
     /// Installed homebrew with a newer version on VitaDB, from the last list.
     updates: usize,
+    /// Whether to fetch the VitaDB list by itself once a session (`vitadb-check.txt`); None until read.
+    vitadb_check: Option<bool>,
+    /// The automatic fetch started in this session.
+    catalog_asked: bool,
     /// Every title this card has had, from `known.tsv`; None until read.
     ledger: Option<Vec<restore::Seen>>,
     /// Title ids of the packages found in `ux0:install` by the last scan.
@@ -346,6 +350,8 @@ impl Shelf {
             catalog: None,
             catalog_list: None,
             updates: 0,
+            vitadb_check: None,
+            catalog_asked: false,
             ledger: None,
             packaged: Default::default(),
             database: None,
@@ -545,6 +551,9 @@ impl Shelf {
             }
             self.summary = self.summary_text();
             self.summary_low = self.free.is_some_and(|free| free < LOW_SPACE);
+        }
+        if self.frame % STATUS_EVERY == STATUS_EVERY / 2 {
+            self.auto_check_catalog(host);
         }
         self.frame += 1;
         let mut pressed = pad & !self.previous;
@@ -1101,6 +1110,13 @@ impl Shelf {
             }
             Item::InstallVpk => {
                 self.open_vpks(host);
+                return;
+            }
+            Item::CatalogCheck => {
+                let on = !self.vitadb_check.unwrap_or(false);
+                self.vitadb_check = Some(on);
+                self.catalog_asked = false;
+                host.write(catalog::VITADB_CHECK_FILE, if on { b"on\n" } else { b"off\n" });
                 return;
             }
             Item::NoCover => {
@@ -1848,6 +1864,7 @@ impl Shelf {
             Item::InstallVpk => (t.install_vpk, None, None, Right),
             Item::Restore => (t.restore, None, None, Right),
             Item::Catalog => (t.catalog, None, None, Right),
+            Item::CatalogCheck => (t.catalog_check, on_off(self.vitadb_check.unwrap_or(false)), None, Both),
             Item::NoCover => (t.no_cover_only, on_off(self.library.no_cover_only), None, Both),
             Item::ConsoleStart => (t.console_start, None, None, Right),
             // While it runs, what it reads and how far it is.
@@ -2138,7 +2155,7 @@ mod tests {
     fn every_menu_setting_is_saved() {
         use menu::{items, Item, PAGES};
         let (mut shelf, mut host) = setup(true, PluginState::On);
-        let actions = [Item::RescanTab, Item::FetchArt, Item::CleanArt, Item::Rescan, Item::GameDatabase, Item::CheckUpdates, Item::Diagnostics, Item::Storage, Item::InstallVpk, Item::Restore, Item::Catalog, Item::NoCover, Item::Categories, Item::ConsoleStart];
+        let actions = [Item::RescanTab, Item::FetchArt, Item::CleanArt, Item::Rescan, Item::GameDatabase, Item::CheckUpdates, Item::Diagnostics, Item::Storage, Item::InstallVpk, Item::Restore, Item::Catalog, Item::CatalogCheck, Item::NoCover, Item::Categories, Item::ConsoleStart];
         let mut checked = 0;
         for page in PAGES {
             for (row, item) in items(page).iter().enumerate() {
