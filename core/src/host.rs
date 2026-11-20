@@ -206,6 +206,9 @@ pub enum LeftoverKind {
     /// `ux0:data/<id>` of a title that is not installed. It may hold saves,
     /// so it is listed and never removed here.
     Data,
+    /// `ux0:app/<id>` with an `eboot.bin` but no `sce_sys/param.sfo`: the
+    /// system cannot read its name and may refuse to start it. Listed only.
+    Damaged,
 }
 
 impl LeftoverKind {
@@ -314,6 +317,9 @@ pub enum GameWork {
     Delete,
     /// Uninstall the game and delete `ux0:data/<id>` and `ux0:rePatch/<id>`.
     DeleteWithData,
+    /// Copy `ux0:user/00/savedata/<id>` to `backup/savedata/<id>` in the data
+    /// folder; the answer holds the bytes copied.
+    BackupSaves,
 }
 
 pub enum Event {

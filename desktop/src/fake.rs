@@ -953,7 +953,11 @@ impl Host for FakeHost {
     fn game_work(&mut self, id: &str, work: shelf_core::host::GameWork) -> bool {
         // What the renders show: a shrink frees
         // 212 MB, a delete works.
-        let freed = if work == shelf_core::host::GameWork::Shrink { 212 * 1024 * 1024 } else { 0 };
+        let freed = match work {
+            shelf_core::host::GameWork::Shrink => 212 * 1024 * 1024,
+            shelf_core::host::GameWork::BackupSaves => 18_874_368,
+            _ => 0,
+        };
         self.later.push(Event::GameWork(id.to_string(), work, Ok(freed)));
         true
     }

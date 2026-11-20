@@ -239,6 +239,7 @@ impl Shelf {
                 crate::host::LeftoverKind::EmptyApp => t.kind_empty,
                 crate::host::LeftoverKind::Patch => t.kind_patch,
                 crate::host::LeftoverKind::Data => t.kind_data,
+                crate::host::LeftoverKind::Damaged => t.kind_damaged,
             };
             lines.push((item.id.clone(), format!("{kind} {}", format_size(item.bytes))));
         }

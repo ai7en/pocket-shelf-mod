@@ -11,6 +11,8 @@
 //! - **Delete** uninstalls the bubble and the game through the system's
 //!   promoter (`scePromoterUtilityDeletePkg`, the call the updater's cleanup
 //!   uses), after closing the game when it runs.
+//! - **Back up saves** copies `ux0:user/00/savedata/<id>` to `backup/savedata/<id>`
+//!   in the data folder, replacing the last copy after the new one is whole.
 //! - **Delete with data** also deletes `ux0:data/<id>` and `ux0:rePatch/<id>`.
 //!   A homebrew that keeps its data under another name leaves that folder.
 
@@ -59,6 +61,7 @@ pub fn run(id: &str, work: GameWork) -> Result<u64, String> {
     log_line(&format!("game work {work:?} {id}: start"));
     let result = match work {
         GameWork::Shrink => shrink(id),
+        GameWork::BackupSaves => backup_saves(id),
         GameWork::Delete => uninstall(id).map(|()| 0),
         GameWork::DeleteWithData => {
             uninstall(id)?;
@@ -96,6 +99,42 @@ pub fn folder_sizes(id: &str) -> shelf_core::host::FolderSizes {
         Some(found.iter().map(|(_, bytes)| bytes).sum::<u64>())
     };
     shelf_core::host::FolderSizes { app: size("ux0:app"), data: size("ux0:data"), repatch: size("ux0:rePatch"), savedata: size("ux0:user/00/savedata") }
+}
+
+/// Copy `ux0:user/00/savedata/<id>` to `<data>/backup/savedata/<id>`, replacing the
+/// last copy only after the new one is complete. The bytes copied.
+fn backup_saves(id: &str) -> Result<u64, String> {
+    let src = format!("ux0:user/00/savedata/{id}");
+    fs::metadata(&src).map_err(|_| String::from("no saves"))?;
+    let mut found = Vec::new();
+    files(&src, "", &mut found);
+    let total: u64 = found.iter().map(|(_, bytes)| bytes).sum();
+    // The copy sits on the same card: it needs its size and some room.
+    if super::storage::space().is_some_and(|(free, _)| free < total + 16 * 1024 * 1024) {
+        return Err(String::from("not enough space"));
+    }
+    let root = format!("{}/backup/savedata", crate::host::DATA);
+    let (new, last) = (format!("{root}/{id}.new"), format!("{root}/{id}"));
+    if fs::metadata(&new).is_ok() {
+        fs::remove_dir_all(&new).map_err(|_| String::from("remove old temp"))?;
+    }
+    for (rel, bytes) in &found {
+        let to = format!("{new}/{rel}");
+        if let Some((dir, _)) = to.rsplit_once('/') {
+            fs::create_dir_all(dir).map_err(|_| format!("create {dir}"))?;
+        }
+        let copied = fs::copy(format!("{src}/{rel}"), &to).map_err(|_| format!("copy {rel}"))?;
+        if copied != *bytes {
+            return Err(format!("size of {rel}"));
+        }
+    }
+    // The new copy is whole; only now does it take the last one's place.
+    fs::create_dir_all(&new).map_err(|_| String::from("create backup"))?;
+    if fs::metadata(&last).is_ok() {
+        fs::remove_dir_all(&last).map_err(|_| String::from("remove last copy"))?;
+    }
+    fs::rename(&new, &last).map_err(|_| String::from("rename backup"))?;
+    Ok(total)
 }
 
 fn uninstall(id: &str) -> Result<(), String> {

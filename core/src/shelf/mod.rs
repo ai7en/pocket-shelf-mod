@@ -2210,7 +2210,7 @@ mod tests {
         // The shelf's own title has none of the three.
         let own = TitleInfo { id: "RETROSHLF".into(), title: "Retro Shelf".into(), platform: "vita".into(), ..Default::default() };
         let own = load_catalog(&[own]);
-        assert!(!editor::editor_rows(&own[0], false, false).contains(&editor::Row::Delete));
+        assert!(!editor::editor_rows(&own[0], false, false, false).contains(&editor::Row::Delete));
     }
 
     /// The editor shows the size of a game's `data` and `rePatch` folders
@@ -2228,6 +2228,7 @@ mod tests {
         shelf.folders_known("PCSA00069", sizes);
         let rows = shelf.editor_row_list();
         assert_eq!(rows[rows.len() - 4..], [editor::Row::Folders, editor::Row::Shrink, editor::Row::Delete, editor::Row::DeleteWithData]);
+        assert!(!rows.contains(&editor::Row::BackupSaves), "no saves found, no backup row");
         assert_eq!(editor::folders_value_for_test(&sizes), "data 1.5 GB");
         let both = crate::host::FolderSizes { app: None, data: Some(2 * 1024 * 1024), repatch: Some(512 * 1024), savedata: None };
         assert_eq!(editor::folders_value_for_test(&both), "data 2.0 MB \u{b7} rePatch 0.5 MB");
@@ -2263,6 +2264,39 @@ mod tests {
         go_to(&mut shelf, editor::Row::Shrink);
         press(&mut shelf, &mut host, CIRCLE);
         assert!(!shelf.editor.as_ref().unwrap().note.contains("ux0:"));
+    }
+
+    /// A game with saves gets a Back up saves row; one press hands the work to
+    /// the host, the answer stays in the editor, and the delete question says
+    /// the saves are not removed. A damaged install is only listed.
+    #[test]
+    fn saves_can_be_backed_up_before_a_delete() {
+        use crate::host::{GameWork, LeftoverKind};
+        let (mut shelf, mut host) = setup(true, PluginState::On);
+        shelf.apply_search("PCSA00069");
+        press(&mut shelf, &mut host, TRIANGLE);
+        let sizes = crate::host::FolderSizes { app: Some(1024), savedata: Some(5 * 1024 * 1024), ..Default::default() };
+        shelf.folders_known("PCSA00069", sizes);
+        let rows = shelf.editor_row_list();
+        assert_eq!(rows[rows.len() - 4..], [editor::Row::BackupSaves, editor::Row::Shrink, editor::Row::Delete, editor::Row::DeleteWithData]);
+        let go_to = |shelf: &mut Shelf, row: editor::Row| {
+            let rows = shelf.editor_row_list();
+            shelf.editor.as_mut().unwrap().row = rows.iter().position(|r| *r == row).unwrap();
+        };
+        go_to(&mut shelf, editor::Row::BackupSaves);
+        press(&mut shelf, &mut host, CIRCLE);
+        assert_eq!(host.works, [("PCSA00069".to_string(), GameWork::BackupSaves)]);
+        assert!(shelf.editor.as_ref().unwrap().busy);
+        let rescans = host.rescans.len();
+        shelf.game_work_done(&mut host, "PCSA00069", GameWork::BackupSaves, Ok(5 * 1024 * 1024));
+        let editor = shelf.editor.as_ref().expect("the editor stays");
+        assert!(!editor.busy && editor.note.contains("5.0 MB"), "{}", editor.note);
+        assert_eq!(host.rescans.len(), rescans, "a backup changes no title");
+        go_to(&mut shelf, editor::Row::Delete);
+        press(&mut shelf, &mut host, CIRCLE);
+        let note = shelf.editor.as_ref().unwrap().note.clone();
+        assert!(note.contains("(5.0 MB)") && note.contains("does not delete"), "{note}");
+        assert!(!LeftoverKind::Damaged.removable());
     }
 
     /// SELECT ▸ System ▸ Storage: findings are listed after the jobs, Clean

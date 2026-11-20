@@ -71,6 +71,9 @@ pub fn check() -> Vec<Leftover> {
         if !has_eboot(id) {
             let bytes = folder_bytes(&format!("ux0:app/{id}"));
             found.push(Leftover { id: id.clone(), kind: LeftoverKind::EmptyApp, bytes });
+        } else if fs::metadata(format!("ux0:app/{id}/sce_sys/param.sfo")).is_err() {
+            let bytes = folder_bytes(&format!("ux0:app/{id}"));
+            found.push(Leftover { id: id.clone(), kind: LeftoverKind::Damaged, bytes });
         }
     }
     let owned = |id: &String| apps.binary_search(id).is_ok();

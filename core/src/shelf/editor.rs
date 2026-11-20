@@ -36,6 +36,8 @@ pub(super) enum Row {
     /// The size of the game's folders in `data` and `rePatch`; only when
     /// the host found one. Shows a value and does nothing.
     Folders,
+    /// Copy the game's saves to the data folder; only when the host found them.
+    BackupSaves,
     /// Remove the manual and the files a patch replaces (Vita games).
     Shrink,
     /// Uninstall the game.
@@ -46,7 +48,7 @@ pub(super) enum Row {
 
 /// The rows for a title: Open with only when several apps can start it, Core
 /// only when the app that opens it has more than one core for it.
-pub(super) fn editor_rows(game: &crate::library::catalog::Game, cores: bool, folders: bool) -> Vec<Row> {
+pub(super) fn editor_rows(game: &crate::library::catalog::Game, cores: bool, folders: bool, saves: bool) -> Vec<Row> {
     use Row::*;
     let mut rows = vec![Favorite, Category, OpenWith, Core, Title, BoxArt, Backdrop, FindArt, Reset];
     if !game.opens.several() {
@@ -59,6 +61,9 @@ pub(super) fn editor_rows(game: &crate::library::catalog::Game, cores: bool, fol
     if game.platform == crate::library::categories::Platform::Vita && *game.id != *crate::autostart::SELF_ID {
         if folders {
             rows.push(Folders);
+        }
+        if saves {
+            rows.push(BackupSaves);
         }
         rows.extend([Shrink, Delete, DeleteWithData]);
     }
@@ -263,7 +268,8 @@ impl Shelf {
     pub(super) fn editor_row_list(&self) -> Vec<Row> {
         let cores = self.editor_cores().is_some_and(|list| list.cores.len() > 1);
         let folders = self.editor.as_ref().and_then(|e| e.folders).is_some_and(|f| f.app.is_some() || f.data.is_some() || f.repatch.is_some() || f.savedata.is_some());
-        self.editor_game().map(|game| editor_rows(&game, cores, folders)).unwrap_or_default()
+        let saves = self.editor.as_ref().and_then(|e| e.folders).is_some_and(|f| f.savedata.is_some());
+        self.editor_game().map(|game| editor_rows(&game, cores, folders, saves)).unwrap_or_default()
     }
 
     /// The cores of the app that starts the edited title.
@@ -356,6 +362,7 @@ impl Shelf {
                 Row::FindArt => self.start_online(host),
                 Row::Reset => self.reset_game(host),
                 Row::Folders => {}
+                Row::BackupSaves => self.backup_saves_press(host),
                 Row::Shrink | Row::Delete | Row::DeleteWithData => self.game_work_press(host, row),
             }
         } else if cancel {
@@ -435,6 +442,23 @@ impl Shelf {
 
     /// Shrink, Delete and Delete with data: the first press asks, the second
     /// hands the work to the host, which runs it off the frame.
+    /// Copy the saves of the edited game; one press, nothing is removed.
+    fn backup_saves_press(&mut self, host: &mut dyn Host) {
+        let Some(game) = self.editor_game() else { return };
+        let t = self.t();
+        let Some(editor) = &mut self.editor else { return };
+        if editor.busy {
+            return;
+        }
+        editor.armed = None;
+        if host.game_work(&game.id, crate::host::GameWork::BackupSaves) {
+            editor.busy = true;
+            editor.note = t.working.to_string();
+        } else {
+            editor.note = fill(t.failed, &[("reason", "unavailable")]);
+        }
+    }
+
     fn game_work_press(&mut self, host: &mut dyn Host, row: Row) {
         use crate::host::GameWork;
         let Some(game) = self.editor_game() else { return };
@@ -453,7 +477,7 @@ impl Shelf {
             editor.note = fill(ask, &[("name", &game.title)]);
             // What the work frees, when the host has measured the folders.
             let freed = editor.folders.map_or(0, |f| match work {
-                GameWork::Shrink => 0,
+                GameWork::Shrink | GameWork::BackupSaves => 0,
                 GameWork::Delete => f.app.unwrap_or(0),
                 GameWork::DeleteWithData => f.app.unwrap_or(0) + f.data.unwrap_or(0) + f.repatch.unwrap_or(0),
             });
@@ -478,6 +502,10 @@ impl Shelf {
                 if !paths.is_empty() {
                     editor.note = format!("{}: {}", editor.note, paths.join(", "));
                 }
+                // The saves stay; a copy is a press away.
+                if let Some(bytes) = f.savedata {
+                    editor.note = format!("{} {}", editor.note, fill(t.confirm_saves, &[("size", &format_size(bytes))]));
+                }
             }
             return;
         }
@@ -496,11 +524,12 @@ impl Shelf {
         use crate::host::GameWork;
         let t = self.t();
         // A title deleted here on purpose is not one to reinstall.
-        if work != GameWork::Shrink && result.is_ok() {
+        let removes = matches!(work, GameWork::Delete | GameWork::DeleteWithData);
+        if removes && result.is_ok() {
             self.ledger_forget(host, id);
         }
         let Some(editor) = self.editor.as_mut().filter(|e| e.id == id) else {
-            if work != GameWork::Shrink && result.is_ok() {
+            if removes && result.is_ok() {
                 host.rescan_some(vec![crate::host::ScanPhase::Apps]);
             }
             return;
@@ -509,6 +538,7 @@ impl Shelf {
         match (work, result) {
             (GameWork::Shrink, Ok(0)) => editor.note = t.shrink_none.to_string(),
             (GameWork::Shrink, Ok(bytes)) => editor.note = fill(t.shrink_done, &[("size", &format_size(bytes))]),
+            (GameWork::BackupSaves, Ok(bytes)) => editor.note = fill(t.saves_backed_up, &[("size", &format_size(bytes))]),
             (_, Ok(_)) => {
                 self.editor = None;
                 host.rescan_some(vec![crate::host::ScanPhase::Apps]);
@@ -600,6 +630,7 @@ impl Shelf {
                 Row::FindArt => (t.find_art, scraper.to_string(), Step::Both),
                 Row::Reset => (t.reset, String::new(), Step::None),
                 Row::Folders => (t.game_folders, folders_value(&folders), Step::None),
+                Row::BackupSaves => (t.backup_saves, String::new(), Step::None),
                 Row::Shrink => (t.shrink, String::new(), Step::None),
                 Row::Delete => (t.delete_game, String::new(), Step::None),
                 Row::DeleteWithData => (t.delete_game_data, String::new(), Step::None),
