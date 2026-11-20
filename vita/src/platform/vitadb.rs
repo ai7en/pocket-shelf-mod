@@ -57,20 +57,45 @@ pub fn fetch_list() -> Result<Vec<CatalogApp>, String> {
     parse(&bytes)
 }
 
-/// A JSON value as text: a string as it is, a number as written.
+/// A JSON value as text: a string as it is, a number as written. The key is
+/// matched without regard to case and to `_`, so `titleid`, `titleID` and
+/// `title_id` are one key.
 fn text(value: &serde_json::Value, key: &str) -> String {
-    match value.get(key) {
+    let wanted = |name: &str| name.bytes().filter(|byte| *byte != b'_').map(|byte| byte.to_ascii_lowercase()).eq(key.bytes());
+    let Some(object) = value.as_object() else { return String::new() };
+    match object.iter().find(|(name, _)| wanted(name)).map(|(_, value)| value) {
         Some(serde_json::Value::String(text)) => text.trim().to_string(),
         Some(serde_json::Value::Number(number)) => number.to_string(),
         _ => String::new(),
     }
 }
 
+/// The array of apps: the document itself, or the first array inside an object.
+fn entries(value: &serde_json::Value) -> Option<&Vec<serde_json::Value>> {
+    match value {
+        serde_json::Value::Array(items) => Some(items),
+        serde_json::Value::Object(object) => object.values().find_map(entries),
+        _ => None,
+    }
+}
+
+/// What the list looks like, for the error shown when nothing in it is usable.
+fn describe(items: &[serde_json::Value]) -> String {
+    let keys = match items.first().and_then(|item| item.as_object()) {
+        Some(object) => object.keys().take(6).cloned().collect::<Vec<_>>().join(","),
+        None => String::from("not objects"),
+    };
+    format!("{} entries, keys: {keys}", items.len())
+}
+
 /// The list's entries with a usable title id; the installed version of each is
 /// read from `ux0:app` here, on the worker thread.
 pub fn parse(bytes: &[u8]) -> Result<Vec<CatalogApp>, String> {
-    let value: serde_json::Value = serde_json::from_slice(bytes).map_err(|_| String::from("list is not JSON"))?;
-    let items = value.as_array().ok_or_else(|| String::from("list is not an array"))?;
+    let value: serde_json::Value = serde_json::from_slice(bytes).map_err(|_| {
+        let head: String = String::from_utf8_lossy(&bytes[..bytes.len().min(40)]).chars().filter(|c| !c.is_control()).collect();
+        format!("list is not JSON: {head}")
+    })?;
+    let items = entries(&value).ok_or_else(|| String::from("list has no array"))?;
     let mut list = Vec::new();
     for item in items {
         let title_id = text(item, "titleid");
@@ -83,13 +108,13 @@ pub fn parse(bytes: &[u8]) -> Result<Vec<CatalogApp>, String> {
             name: text(item, "name"),
             version: text(item, "version"),
             size: text(item, "size"),
-            data: !text(item, "data").is_empty() || !text(item, "data_size").is_empty(),
+            data: !text(item, "data").is_empty() || !text(item, "datasize").is_empty(),
             installed: vpk::installed_version(&title_id),
             title_id,
         });
     }
     if list.is_empty() {
-        return Err(String::from("list has no apps"));
+        return Err(format!("list has no apps ({})", describe(items)));
     }
     Ok(list)
 }
@@ -132,5 +157,9 @@ mod tests {
         assert_eq!((list[0].id.as_str(), list[0].version.as_str(), list[0].data), ("12", "1.2", false));
         assert_eq!((list[1].id.as_str(), list[1].version.as_str(), list[1].data), ("13", "3", true));
         assert!(parse(b"{}").is_err() && parse(b"nope").is_err() && parse(b"[]").is_err());
+        let wrapped = br#"{"data": [{"ID": 5, "Name": "W", "title_id": "WRAP00001", "version": "1"}]}"#;
+        assert_eq!(parse(wrapped).unwrap()[0].title_id, "WRAP00001");
+        let error = parse(br#"[{"foo": 1}]"#).unwrap_err();
+        assert!(error.contains("1 entries") && error.contains("foo"), "{error}");
     }
 }

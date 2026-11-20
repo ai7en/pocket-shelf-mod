@@ -644,7 +644,11 @@ impl Host for VitaHost {
 
     fn catalog_fetch(&mut self) -> bool {
         self.storage_job("vitadb list", move |sender| {
-            let _ = sender.send(Event::Catalog(crate::platform::vitadb::fetch_list()));
+            let list = crate::platform::vitadb::fetch_list();
+            if let Err(error) = &list {
+                log_line(&format!("vitadb list: {error}"));
+            }
+            let _ = sender.send(Event::Catalog(list));
         })
     }
 
