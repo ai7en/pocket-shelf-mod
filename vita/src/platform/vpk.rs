@@ -42,7 +42,7 @@ const PIECE: usize = 64 * 1024;
 
 static PROGRESS: Mutex<VpkProgress> = Mutex::new(VpkProgress::Idle);
 
-fn set(state: VpkProgress) {
+pub(super) fn set(state: VpkProgress) {
     if let Ok(mut current) = PROGRESS.lock() {
         *current = state;
     }
@@ -137,11 +137,7 @@ fn inspect(path: &str, icons: &str) -> VpkInfo {
         info.problem = String::from("this app");
     }
     if valid_id(&info.title_id) {
-        let folder = format!("ux0:app/{}", info.title_id);
-        if fs::metadata(&folder).is_ok() {
-            let version = fs::read(format!("{folder}/sce_sys/param.sfo")).ok().and_then(|sfo| sfo_string(&sfo, "APP_VER")).unwrap_or_default();
-            info.installed = Some(version);
-        }
+        info.installed = installed_version(&info.title_id);
     }
     if let Some(png) = small(&mut file, &list, "sce_sys/icon0.png") {
         let target = format!("{icons}/{:08x}.png", !crc32_update(!0, path.as_bytes()));
@@ -218,6 +214,13 @@ fn write_entry(file: &mut fs::File, entry: &Entry, out_path: &str, done: &mut u6
 }
 
 /// Install the package at `path`: the title id on success, else why not.
+/// The `APP_VER` of the installed title `id` (empty when it has none); None when it is not installed.
+pub(super) fn installed_version(id: &str) -> Option<String> {
+    let folder = format!("ux0:app/{id}");
+    fs::metadata(&folder).ok()?;
+    Some(fs::read(format!("{folder}/sce_sys/param.sfo")).ok().and_then(|sfo| sfo_string(&sfo, "APP_VER")).unwrap_or_default())
+}
+
 /// Delete one package file; only a `.vpk` below the install folder.
 pub fn delete(path: &str) -> bool {
     let ok = path.starts_with("ux0:install/") && path.to_ascii_lowercase().ends_with(".vpk") && !path.contains("..");
@@ -225,13 +228,18 @@ pub fn delete(path: &str) -> bool {
 }
 
 pub fn install(path: &str) -> Result<String, String> {
+    install_expecting(path, None)
+}
+
+/// Install, refusing a package whose title id is not `expected`.
+pub fn install_expecting(path: &str, expected: Option<&str>) -> Result<String, String> {
     set(VpkProgress::Unpacking(0, 0));
-    let result = install_inner(path);
+    let result = install_inner(path, expected);
     set(VpkProgress::Idle);
     result
 }
 
-fn install_inner(path: &str) -> Result<String, String> {
+fn install_inner(path: &str, expected: Option<&str>) -> Result<String, String> {
     let mut file = fs::File::open(path).map_err(|_| String::from("no vpk"))?;
     let list = entries(&mut file)?;
     let sfo = small(&mut file, &list, "sce_sys/param.sfo").ok_or_else(|| String::from("no param.sfo"))?;
@@ -241,6 +249,9 @@ fn install_inner(path: &str) -> Result<String, String> {
     }
     if title_id == SELF_TITLE_ID {
         return Err(String::from("this app"));
+    }
+    if expected.is_some_and(|expected| expected != title_id) {
+        return Err(format!("package is for {title_id}"));
     }
     if !list.iter().any(|entry| entry.name == "eboot.bin") {
         return Err(String::from("no eboot.bin"));

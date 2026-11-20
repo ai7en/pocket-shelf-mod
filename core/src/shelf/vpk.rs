@@ -168,6 +168,7 @@ impl Shelf {
             VpkProgress::Unpacking(done, total) if total > 0 => fill(t.install_unpacking, &[("percent", &(done * 100 / total).to_string())]),
             VpkProgress::Unpacking(..) => t.working.to_string(),
             VpkProgress::Installing => t.install_installing.to_string(),
+            VpkProgress::Downloading(..) => t.working.to_string(),
             VpkProgress::Idle => panel.note.clone(),
         };
     }

@@ -257,6 +257,24 @@ pub enum VpkProgress {
     Unpacking(u64, u64),
     /// The system's installer runs.
     Installing,
+    /// A package comes from the network: bytes received, and in all (0 when unknown).
+    Downloading(u64, u64),
+}
+
+/// One homebrew of the VitaDB list.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CatalogApp {
+    /// VitaDB's own id, for the download address.
+    pub id: String,
+    pub name: String,
+    pub title_id: String,
+    pub version: String,
+    /// As VitaDB writes it (`12.3 MB`).
+    pub size: String,
+    /// The app has data files, which are a separate download.
+    pub data: bool,
+    /// The version of the same title id that is installed; None when it is not.
+    pub installed: Option<String>,
 }
 
 /// A folder's entry, as [`Host::list_folder`] answers it.
@@ -375,6 +393,10 @@ pub enum Event {
     VpkInstalled(String, Result<String, String>),
     /// A package file was deleted from `ux0:install`: its path and whether it worked.
     VpkDeleted(String, bool),
+    /// The VitaDB list, or why it could not be fetched.
+    Catalog(Result<Vec<CatalogApp>, String>),
+    /// A homebrew from the list was downloaded and installed: its title id and the result.
+    CatalogInstalled(String, Result<String, String>),
     /// [`Host::storage_check`] finished.
     StorageChecked(Vec<Leftover>),
     /// [`Host::storage_clean`] finished: folders removed, folders that stayed.
@@ -654,6 +676,18 @@ pub trait Host {
     /// Install one of those packages on a worker thread; answered with
     /// [`Event::VpkInstalled`].
     fn vpk_install(&mut self, _path: &str) -> bool {
+        false
+    }
+
+    /// Fetch the VitaDB list on a worker thread; answered with [`Event::Catalog`].
+    /// False when this host cannot.
+    fn catalog_fetch(&mut self) -> bool {
+        false
+    }
+
+    /// Download the homebrew with VitaDB id `id` and install it; answered with
+    /// [`Event::CatalogInstalled`]. Progress is read with [`Host::vpk_progress`].
+    fn catalog_install(&mut self, _id: &str, _title_id: &str) -> bool {
         false
     }
 

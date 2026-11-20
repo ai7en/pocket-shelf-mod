@@ -642,6 +642,20 @@ impl Host for VitaHost {
         })
     }
 
+    fn catalog_fetch(&mut self) -> bool {
+        self.storage_job("vitadb list", move |sender| {
+            let _ = sender.send(Event::Catalog(crate::platform::vitadb::fetch_list()));
+        })
+    }
+
+    fn catalog_install(&mut self, id: &str, title_id: &str) -> bool {
+        let (id, title_id) = (id.to_string(), title_id.to_string());
+        self.storage_job("vitadb install", move |sender| {
+            let result = crate::platform::vitadb::install(&id, &title_id);
+            let _ = sender.send(Event::CatalogInstalled(title_id, result));
+        })
+    }
+
     fn vpk_delete(&mut self, path: &str) -> bool {
         let path = path.to_string();
         self.storage_job("vpk delete", move |sender| {

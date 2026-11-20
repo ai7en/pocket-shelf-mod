@@ -104,6 +104,10 @@ impl Shelf {
         let t = self.t();
         let Some(free) = self.free else { return String::new() };
         let mut text = fill(t.summary_free, &[("free", &super::editor::format_size(free))]);
+        if self.updates > 0 {
+            text.push_str(" \u{b7} ");
+            text.push_str(&fill(t.summary_updates, &[("count", &self.updates.to_string())]));
+        }
         if self.missing > 0 {
             text.push_str(" \u{b7} ");
             text.push_str(&fill(t.summary_missing, &[("count", &self.missing.to_string())]));
@@ -117,7 +121,7 @@ impl Shelf {
     }
 
     /// The titles to reinstall: id and name.
-    fn to_reinstall(&self) -> Vec<(String, String)> {
+    pub(super) fn to_reinstall(&self) -> Vec<(String, String)> {
         let installed: HashSet<&str> = self.library.games().iter().map(|game| &*game.id).collect();
         let empty = Vec::new();
         missing(self.ledger.as_ref().unwrap_or(&empty), &installed).into_iter().map(|seen| (seen.id.clone(), seen.name.clone())).collect()

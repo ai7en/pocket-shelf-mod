@@ -204,6 +204,16 @@ impl App {
                         shelf.vpk_installed(host, &path, result);
                     }
                 }
+                Event::Catalog(result) => {
+                    if let Some(shelf) = &mut self.shelf {
+                        shelf.catalog_arrived(result);
+                    }
+                }
+                Event::CatalogInstalled(title_id, result) => {
+                    if let Some(shelf) = &mut self.shelf {
+                        shelf.catalog_installed(host, &title_id, result);
+                    }
+                }
                 Event::VpkDeleted(path, ok) => {
                     if let Some(shelf) = &mut self.shelf {
                         shelf.vpk_deleted(&path, ok);

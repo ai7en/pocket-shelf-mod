@@ -912,6 +912,26 @@ impl Host for FakeHost {
         true
     }
 
+    fn catalog_fetch(&mut self) -> bool {
+        use shelf_core::host::CatalogApp;
+        let app = |id: &str, name: &str, title: &str, version: &str, installed: Option<&str>| CatalogApp {
+            id: id.into(),
+            name: name.into(),
+            title_id: title.into(),
+            version: version.into(),
+            size: "4.2 MB".into(),
+            data: false,
+            installed: installed.map(str::to_string),
+        };
+        self.later.push(Event::Catalog(Ok(vec![app("1", "VitaShell", "VITASHELL", "2.03", Some("02.02")), app("2", "Sample Homebrew", "SMPL00001", "1.0", None)])));
+        true
+    }
+
+    fn catalog_install(&mut self, _id: &str, title_id: &str) -> bool {
+        self.later.push(Event::CatalogInstalled(title_id.to_string(), Ok(title_id.to_string())));
+        true
+    }
+
     fn vpk_delete(&mut self, path: &str) -> bool {
         self.later.push(Event::VpkDeleted(path.to_string(), true));
         true

@@ -45,6 +45,8 @@ const FILE_MAX: usize = 8 * 1024 * 1024;
 const VPK_MAX: usize = 64 * 1024 * 1024;
 /// Largest thumbnail listing page read. The NES box art page is 4 MB.
 const INDEX_MAX: usize = 16 * 1024 * 1024;
+/// Largest VitaDB homebrew package written.
+const HOMEBREW_MAX: usize = 1024 * 1024 * 1024;
 /// The one path an update package is saved to (`updates::UPDATE_FILE`).
 pub const UPDATE_VPK: &str = "update/pocket-shelf.vpk";
 /// Requests running or waiting to be read at once.
@@ -87,6 +89,10 @@ enum Kind {
     /// release): read in memory and written once it reads as one, so an
     /// error page never replaces a good file.
     Wikidata,
+    /// VitaDB's list (`vitadb/list.json`), written as a file.
+    Catalog,
+    /// A VitaDB homebrew package (`vitadb/<title id>.vpk`).
+    Homebrew,
 }
 
 enum Outcome {
@@ -135,6 +141,10 @@ fn valid_dest(path: &str) -> bool {
     let Some((dir, name)) = path.split_once('/') else {
         return false;
     };
+    if dir == "vitadb" {
+        let plain = name.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'_'));
+        return name == "list.json" || (name.len() >= 5 && name.len() <= 64 && !name.starts_with('.') && name.ends_with(".vpk") && plain);
+    }
     let extension = match dir {
         "libretro" => ".txt",
         "gamedb" | "wikidata" => ".tsv",
@@ -212,6 +222,8 @@ fn start_kind(url: &str, auth: &str, dest: Option<&str>, icon: bool, bytes: bool
         Some(path) if path.starts_with("libretro/") => Kind::Index,
         Some(path) if path.starts_with("gamedb/") => Kind::Database,
         Some(path) if path.starts_with("wikidata/") => Kind::Wikidata,
+        Some("vitadb/list.json") => Kind::Catalog,
+        Some(path) if path.starts_with("vitadb/") => Kind::Homebrew,
         Some(path) if icon && path.starts_with("art/") => Kind::Icon,
         Some(_) => Kind::File,
     };
@@ -380,6 +392,8 @@ fn run(id: i32, url: &str, auth: &str, dest: Option<&str>, kind: Kind, cancel: &
         (None, _) | (_, Kind::Text) | (_, Kind::Bytes) => TEXT_MAX,
         (Some(_), Kind::File | Kind::Icon) => FILE_MAX,
         (Some(_), Kind::Package) => VPK_MAX,
+        (Some(_), Kind::Homebrew) => HOMEBREW_MAX,
+        (Some(_), Kind::Catalog) => INDEX_MAX,
         (Some(_), Kind::Index | Kind::Database | Kind::Wikidata) => INDEX_MAX,
     };
     // A listing page and the tables are read in memory; everything else
@@ -495,9 +509,13 @@ fn run(id: i32, url: &str, auth: &str, dest: Option<&str>, kind: Kind, cancel: &
     }
     if let (Some(file), Some(part), Some(path)) = (file, part, saving) {
         drop(file);
-        if kind == Kind::Package {
+        if matches!(kind, Kind::Package | Kind::Homebrew) {
             if head[..4] != ZIP_SIGNATURE {
                 return Err(String::from("not a vpk"));
+            }
+        } else if kind == Kind::Catalog {
+            if received == 0 || head[0] != b'[' {
+                return Err(String::from("not a list"));
             }
         } else if received < head.len() || head != PNG_SIGNATURE {
             return Err(String::from("not a png"));

@@ -62,6 +62,8 @@ pub enum Item {
     InstallVpk,
     /// The titles this card has had that are not installed now.
     Restore,
+    /// Updates and missing homebrew from VitaDB.
+    Catalog,
     /// List only the games without box art, until the next start.
     NoCover,
     /// Open at console start and Return after a game (`autostart.rs`). Not
@@ -88,7 +90,7 @@ pub fn items(page: Page) -> &'static [Item] {
         Page::Games => &[Categories, Emulator, Rescan, GameDatabase, GameNames, GameDetails, Open(Page::Artwork)],
         Page::Artwork => &[FetchArt, CleanArt],
         Page::System => &[Confirm, Keyboard, RetroConsoles, UpdateChannel, CheckUpdates],
-        Page::Tools => &[InstallVpk, Storage, Restore, NoCover, Diagnostics],
+        Page::Tools => &[InstallVpk, Storage, Restore, Catalog, NoCover, Diagnostics],
     }
 }
 

@@ -13,6 +13,7 @@ pub mod menu;
 pub mod navigation;
 pub mod panel;
 mod database;
+mod catalog;
 pub mod restore;
 mod storage;
 mod tools;
@@ -228,6 +229,12 @@ pub struct Shelf {
     vpks: Option<vpk::Vpks>,
     /// SELECT ▸ Tools ▸ To reinstall.
     restore: Option<restore::Restore>,
+    /// SELECT ▸ Tools ▸ Homebrew (VitaDB).
+    catalog: Option<catalog::Catalog>,
+    /// The VitaDB list of this session; None until fetched.
+    catalog_list: Option<Vec<crate::host::CatalogApp>>,
+    /// Installed homebrew with a newer version on VitaDB, from the last list.
+    updates: usize,
     /// Every title this card has had, from `known.tsv`; None until read.
     ledger: Option<Vec<restore::Seen>>,
     /// Title ids of the packages found in `ux0:install` by the last scan.
@@ -336,6 +343,9 @@ impl Shelf {
             storage: None,
             vpks: None,
             restore: None,
+            catalog: None,
+            catalog_list: None,
+            updates: 0,
             ledger: None,
             packaged: Default::default(),
             database: None,
@@ -620,6 +630,8 @@ impl Shelf {
             self.cleanup_input(host, step, pressed & confirm != 0, pressed & cancel != 0);
         } else if self.console_start.is_some() {
             self.console_start_input(host, step, pressed & confirm != 0, pressed & cancel != 0);
+        } else if self.catalog.is_some() {
+            self.catalog_input(host, step, pressed & confirm != 0, pressed & SQUARE != 0, pressed & cancel != 0);
         } else if self.restore.is_some() {
             self.restore_input(host, step, pressed & TRIANGLE != 0, pressed & cancel != 0);
         } else if self.vpks.is_some() {
@@ -757,6 +769,7 @@ impl Shelf {
         self.picker_frame(host);
         self.browser_frame(host);
         self.vpks_frame(host);
+        self.catalog_frame(host);
         self.online_frame(host);
         self.request_icons(host);
         self.blend_dynamic();
@@ -1098,6 +1111,10 @@ impl Shelf {
             }
             Item::Restore => {
                 self.open_restore(host);
+                return;
+            }
+            Item::Catalog => {
+                self.open_catalog(host);
                 return;
             }
             Item::ConsoleStart => {
@@ -1489,6 +1506,9 @@ impl Shelf {
         if self.restore.is_some() {
             self.draw_restore(gfx);
         }
+        if self.catalog.is_some() {
+            self.draw_catalog(gfx);
+        }
         if self.database.is_some() {
             self.draw_database(gfx);
         }
@@ -1827,6 +1847,7 @@ impl Shelf {
             Item::Storage => (t.storage, None, None, Right),
             Item::InstallVpk => (t.install_vpk, None, None, Right),
             Item::Restore => (t.restore, None, None, Right),
+            Item::Catalog => (t.catalog, None, None, Right),
             Item::NoCover => (t.no_cover_only, on_off(self.library.no_cover_only), None, Both),
             Item::ConsoleStart => (t.console_start, None, None, Right),
             // While it runs, what it reads and how far it is.
@@ -2117,7 +2138,7 @@ mod tests {
     fn every_menu_setting_is_saved() {
         use menu::{items, Item, PAGES};
         let (mut shelf, mut host) = setup(true, PluginState::On);
-        let actions = [Item::RescanTab, Item::FetchArt, Item::CleanArt, Item::Rescan, Item::GameDatabase, Item::CheckUpdates, Item::Diagnostics, Item::Storage, Item::InstallVpk, Item::Restore, Item::NoCover, Item::Categories, Item::ConsoleStart];
+        let actions = [Item::RescanTab, Item::FetchArt, Item::CleanArt, Item::Rescan, Item::GameDatabase, Item::CheckUpdates, Item::Diagnostics, Item::Storage, Item::InstallVpk, Item::Restore, Item::Catalog, Item::NoCover, Item::Categories, Item::ConsoleStart];
         let mut checked = 0;
         for page in PAGES {
             for (row, item) in items(page).iter().enumerate() {

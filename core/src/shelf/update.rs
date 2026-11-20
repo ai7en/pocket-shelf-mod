@@ -141,6 +141,7 @@ impl Shelf {
             && self.storage.is_none()
             && self.vpks.is_none()
             && self.restore.is_none()
+            && self.catalog.is_none()
             && self.diagnostics.is_none()
             && self.fetch.is_none()
             && self.cleanup.is_none()
