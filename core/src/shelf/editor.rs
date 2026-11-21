@@ -17,6 +17,38 @@ use crate::library::settings::ScrapeSource;
 use crate::shapes::Symbol;
 use crate::text::Role;
 
+/// The folders of a game whose size the editor shows, one row each.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum Folder {
+    App,
+    Data,
+    RePatch,
+    Saves,
+}
+
+impl Folder {
+    const ALL: [Folder; 4] = [Folder::App, Folder::Data, Folder::RePatch, Folder::Saves];
+
+    /// The folder's name on disk, which is its label.
+    fn label(self) -> &'static str {
+        match self {
+            Folder::App => "app",
+            Folder::Data => "data",
+            Folder::RePatch => "rePatch",
+            Folder::Saves => "saves",
+        }
+    }
+
+    fn size(self, sizes: &crate::host::FolderSizes) -> Option<u64> {
+        match self {
+            Folder::App => sizes.app,
+            Folder::Data => sizes.data,
+            Folder::RePatch => sizes.repatch,
+            Folder::Saves => sizes.savedata,
+        }
+    }
+}
+
 /// The editor's rows, in order (`editor_rows`).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) enum Row {
@@ -33,9 +65,9 @@ pub(super) enum Row {
     Backdrop,
     FindArt,
     Reset,
-    /// The size of the game's folders in `data` and `rePatch`; only when
-    /// the host found one. Shows a value and does nothing.
-    Folders,
+    /// The size of one of the game's folders; only when the host found it.
+    /// Shows a value and does nothing.
+    Folder(Folder),
     /// Copy the game's saves to the data folder; only when the host found them.
     BackupSaves,
     /// Remove the manual and the files a patch replaces (Vita games).
@@ -48,7 +80,7 @@ pub(super) enum Row {
 
 /// The rows for a title: Open with only when several apps can start it, Core
 /// only when the app that opens it has more than one core for it.
-pub(super) fn editor_rows(game: &crate::library::catalog::Game, cores: bool, folders: bool, saves: bool) -> Vec<Row> {
+pub(super) fn editor_rows(game: &crate::library::catalog::Game, cores: bool, sizes: &crate::host::FolderSizes) -> Vec<Row> {
     use Row::*;
     let mut rows = vec![Favorite, Category, OpenWith, Core, Title, BoxArt, Backdrop, FindArt, Reset];
     if !game.opens.several() {
@@ -59,10 +91,8 @@ pub(super) fn editor_rows(game: &crate::library::catalog::Game, cores: bool, fol
     }
     // Only an installed Vita game (and homebrew), never this app itself.
     if game.platform == crate::library::categories::Platform::Vita && *game.id != *crate::autostart::SELF_ID {
-        if folders {
-            rows.push(Folders);
-        }
-        if saves {
+        rows.extend(Folder::ALL.into_iter().filter(|folder| folder.size(sizes).is_some()).map(Row::Folder));
+        if sizes.savedata.is_some() {
             rows.push(BackupSaves);
         }
         rows.extend([Shrink, Delete, DeleteWithData]);
@@ -80,36 +110,6 @@ pub(super) fn format_size(bytes: u64) -> String {
     }
 }
 
-/// The Folders row's value: `app 3.2 GB · data 1.2 GB · rePatch 340.0 MB`, each part only
-/// when that folder exists. The folders keep their names on disk.
-fn folders_value(sizes: &crate::host::FolderSizes) -> String {
-    let mut parts = Vec::new();
-    if let Some(bytes) = sizes.app {
-        parts.push(format!("app {}", format_size(bytes)));
-    }
-    if let Some(bytes) = sizes.data {
-        parts.push(format!("data {}", format_size(bytes)));
-    }
-    if let Some(bytes) = sizes.repatch {
-        parts.push(format!("rePatch {}", format_size(bytes)));
-    }
-    if let Some(bytes) = sizes.savedata {
-        parts.push(format!("saves {}", format_size(bytes)));
-    }
-    parts.join(" \u{b7} ")
-}
-
-#[cfg(test)]
-pub(super) fn folders_value_for_test(sizes: &crate::host::FolderSizes) -> String {
-    folders_value(sizes)
-}
-
-/// A core as the Core row names it: RetroArch's without `_libretro.self`.
-pub(super) fn core_name(core: &str) -> &str {
-    core.strip_suffix("_libretro.self").unwrap_or(core)
-}
-
-/// Editor rows shown at once; with Open with the list scrolls.
 const EDITOR_VISIBLE: usize = 7;
 /// Room for a value beside its label.
 const VALUE_W: f32 = 320.0;
@@ -267,9 +267,8 @@ impl Shelf {
     /// The edited title's rows; none when no title is edited.
     pub(super) fn editor_row_list(&self) -> Vec<Row> {
         let cores = self.editor_cores().is_some_and(|list| list.cores.len() > 1);
-        let folders = self.editor.as_ref().and_then(|e| e.folders).is_some_and(|f| f.app.is_some() || f.data.is_some() || f.repatch.is_some() || f.savedata.is_some());
-        let saves = self.editor.as_ref().and_then(|e| e.folders).is_some_and(|f| f.savedata.is_some());
-        self.editor_game().map(|game| editor_rows(&game, cores, folders, saves)).unwrap_or_default()
+        let sizes = self.editor.as_ref().and_then(|e| e.folders).unwrap_or_default();
+        self.editor_game().map(|game| editor_rows(&game, cores, &sizes)).unwrap_or_default()
     }
 
     /// The cores of the app that starts the edited title.
@@ -361,7 +360,7 @@ impl Shelf {
                 Row::Backdrop => self.open_picker(host, true),
                 Row::FindArt => self.start_online(host),
                 Row::Reset => self.reset_game(host),
-                Row::Folders => {}
+                Row::Folder(_) => {}
                 Row::BackupSaves => self.backup_saves_press(host),
                 Row::Shrink | Row::Delete | Row::DeleteWithData => self.game_work_press(host, row),
             }
@@ -629,7 +628,7 @@ impl Shelf {
                 Row::Backdrop => (t.backdrop, fit(gfx, &backdrop), Step::Right),
                 Row::FindArt => (t.find_art, scraper.to_string(), Step::Both),
                 Row::Reset => (t.reset, String::new(), Step::None),
-                Row::Folders => (t.game_folders, folders_value(&folders), Step::None),
+                Row::Folder(folder) => (folder.label(), folder.size(&folders).map(format_size).unwrap_or_default(), Step::None),
                 Row::BackupSaves => (t.backup_saves, String::new(), Step::None),
                 Row::Shrink => (t.shrink, String::new(), Step::None),
                 Row::Delete => (t.delete_game, String::new(), Step::None),

@@ -2248,7 +2248,7 @@ mod tests {
         // The shelf's own title has none of the three.
         let own = TitleInfo { id: "RETROSHLF".into(), title: "Retro Shelf".into(), platform: "vita".into(), ..Default::default() };
         let own = load_catalog(&[own]);
-        assert!(!editor::editor_rows(&own[0], false, false, false).contains(&editor::Row::Delete));
+        assert!(!editor::editor_rows(&own[0], false, &Default::default()).contains(&editor::Row::Delete));
     }
 
     /// The editor shows the size of a game's `data` and `rePatch` folders
@@ -2258,20 +2258,22 @@ mod tests {
         let (mut shelf, mut host) = setup(true, PluginState::On);
         shelf.apply_search("PCSA00069");
         press(&mut shelf, &mut host, TRIANGLE);
-        assert!(!shelf.editor_row_list().contains(&editor::Row::Folders));
+        assert!(!shelf.editor_row_list().iter().any(|r| matches!(r, editor::Row::Folder(_))));
         let none = crate::host::FolderSizes::default();
         shelf.folders_known("PCSA00069", none);
-        assert!(!shelf.editor_row_list().contains(&editor::Row::Folders));
+        assert!(!shelf.editor_row_list().iter().any(|r| matches!(r, editor::Row::Folder(_))));
         let sizes = crate::host::FolderSizes { data: Some(3 * 1024 * 1024 * 1024 / 2), ..Default::default() };
         shelf.folders_known("PCSA00069", sizes);
         let rows = shelf.editor_row_list();
-        assert_eq!(rows[rows.len() - 4..], [editor::Row::Folders, editor::Row::Shrink, editor::Row::Delete, editor::Row::DeleteWithData]);
+        assert_eq!(rows[rows.len() - 4..], [editor::Row::Folder(editor::Folder::Data), editor::Row::Shrink, editor::Row::Delete, editor::Row::DeleteWithData]);
         assert!(!rows.contains(&editor::Row::BackupSaves), "no saves found, no backup row");
-        assert_eq!(editor::folders_value_for_test(&sizes), "data 1.5 GB");
-        let both = crate::host::FolderSizes { app: None, data: Some(2 * 1024 * 1024), repatch: Some(512 * 1024), savedata: None };
-        assert_eq!(editor::folders_value_for_test(&both), "data 2.0 MB \u{b7} rePatch 0.5 MB");
-        let saves = crate::host::FolderSizes { savedata: Some(3 * 1024 * 1024), ..Default::default() };
-        assert_eq!(editor::folders_value_for_test(&saves), "saves 3.0 MB");
+        let both = crate::host::FolderSizes { app: Some(5), data: Some(2 * 1024 * 1024), repatch: Some(512 * 1024), savedata: Some(3 * 1024 * 1024) };
+        shelf.folders_known("PCSA00069", both);
+        let rows = shelf.editor_row_list();
+        let folders: Vec<_> = rows.iter().filter(|r| matches!(r, editor::Row::Folder(_))).collect();
+        assert_eq!(folders.len(), 4, "one row for each folder, not one long line");
+        assert!(rows.contains(&editor::Row::BackupSaves));
+        shelf.folders_known("PCSA00069", sizes);
         // An answer for another title changes nothing.
         shelf.folders_known("OTHER0001", none);
         assert_eq!(shelf.editor.as_ref().unwrap().folders, Some(sizes));
