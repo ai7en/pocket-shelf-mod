@@ -91,7 +91,7 @@ pub(super) fn editor_rows(game: &crate::library::catalog::Game, cores: bool, siz
     }
     // Only an installed Vita game (and homebrew), never this app itself.
     if game.platform == crate::library::categories::Platform::Vita && *game.id != *crate::autostart::SELF_ID {
-        rows.extend(Folder::ALL.into_iter().filter(|folder| folder.size(sizes).is_some()).map(Row::Folder));
+        rows.extend(self::Folder::ALL.into_iter().filter(|folder| folder.size(sizes).is_some()).map(Row::Folder));
         if sizes.savedata.is_some() {
             rows.push(BackupSaves);
         }
@@ -110,6 +110,12 @@ pub(super) fn format_size(bytes: u64) -> String {
     }
 }
 
+/// A core as the Core row names it: RetroArch's without `_libretro.self`.
+pub(super) fn core_name(core: &str) -> &str {
+    core.strip_suffix("_libretro.self").unwrap_or(core)
+}
+
+/// Editor rows shown at once; with Open with the list scrolls.
 const EDITOR_VISIBLE: usize = 7;
 /// Room for a value beside its label.
 const VALUE_W: f32 = 320.0;
