@@ -143,7 +143,7 @@ pub fn sizes() -> Vec<(String, u64)> {
 pub fn shrink_all(ids: &[String]) -> (u32, u64) {
     let (mut games, mut freed) = (0, 0);
     for id in ids {
-        match super::gamework::run(id, GameWork::Shrink) {
+        match super::gamework::run(id, GameWork::Shrink, "") {
             Ok(bytes) if bytes > 0 => {
                 games += 1;
                 freed += bytes;

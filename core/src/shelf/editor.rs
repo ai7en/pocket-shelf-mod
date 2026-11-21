@@ -70,6 +70,9 @@ pub(super) enum Row {
     Folder(Folder),
     /// Copy the game's saves to the data folder; only when the host found them.
     BackupSaves,
+    /// Pick the folder of `ux0:data` that holds the app's files; shown once
+    /// the host has measured the folders.
+    DataFolder,
     /// Remove the manual and the files a patch replaces (Vita games).
     Shrink,
     /// Uninstall the game.
@@ -80,7 +83,9 @@ pub(super) enum Row {
 
 /// The rows for a title: Open with only when several apps can start it, Core
 /// only when the app that opens it has more than one core for it.
-pub(super) fn editor_rows(game: &crate::library::catalog::Game, cores: bool, sizes: &crate::host::FolderSizes) -> Vec<Row> {
+pub(super) fn editor_rows(game: &crate::library::catalog::Game, cores: bool, sizes: Option<&crate::host::FolderSizes>) -> Vec<Row> {
+    let measured = sizes.is_some();
+    let sizes = &sizes.copied().unwrap_or_default();
     use Row::*;
     let mut rows = vec![Favorite, Category, OpenWith, Core, Title, BoxArt, Backdrop, FindArt, Reset];
     if !game.opens.several() {
@@ -94,6 +99,9 @@ pub(super) fn editor_rows(game: &crate::library::catalog::Game, cores: bool, siz
         rows.extend(self::Folder::ALL.into_iter().filter(|folder| folder.size(sizes).is_some()).map(Row::Folder));
         if sizes.savedata.is_some() {
             rows.push(BackupSaves);
+        }
+        if measured {
+            rows.push(DataFolder);
         }
         rows.extend([Shrink, Delete, DeleteWithData]);
     }
@@ -259,7 +267,8 @@ impl Shelf {
         }
         // The folders' sizes are walked off the frame too.
         if game.platform == crate::library::categories::Platform::Vita && *game.id != *crate::autostart::SELF_ID {
-            host.folder_sizes(&id);
+            let data = self.data_folder_for(host, &id);
+            host.folder_sizes(&id, &data);
         }
         self.editor = Some(Editor { id, row: 0, note: String::new(), cores: Vec::new(), folders: None, armed: None, busy: false });
         self.drawer = panel::slide();
@@ -273,8 +282,8 @@ impl Shelf {
     /// The edited title's rows; none when no title is edited.
     pub(super) fn editor_row_list(&self) -> Vec<Row> {
         let cores = self.editor_cores().is_some_and(|list| list.cores.len() > 1);
-        let sizes = self.editor.as_ref().and_then(|e| e.folders).unwrap_or_default();
-        self.editor_game().map(|game| editor_rows(&game, cores, &sizes)).unwrap_or_default()
+        let sizes = self.editor.as_ref().and_then(|e| e.folders);
+        self.editor_game().map(|game| editor_rows(&game, cores, sizes.as_ref())).unwrap_or_default()
     }
 
     /// The cores of the app that starts the edited title.
@@ -368,6 +377,7 @@ impl Shelf {
                 Row::Reset => self.reset_game(host),
                 Row::Folder(_) => {}
                 Row::BackupSaves => self.backup_saves_press(host),
+                Row::DataFolder => self.open_data_folder(host),
                 Row::Shrink | Row::Delete | Row::DeleteWithData => self.game_work_press(host, row),
             }
         } else if cancel {
@@ -456,7 +466,7 @@ impl Shelf {
             return;
         }
         editor.armed = None;
-        if host.game_work(&game.id, crate::host::GameWork::BackupSaves) {
+        if host.game_work(&game.id, crate::host::GameWork::BackupSaves, "") {
             editor.busy = true;
             editor.note = t.working.to_string();
         } else {
@@ -468,6 +478,7 @@ impl Shelf {
         use crate::host::GameWork;
         let Some(game) = self.editor_game() else { return };
         let t = self.t();
+        let data = self.data_folder_for(host, &game.id);
         let Some(editor) = &mut self.editor else { return };
         if editor.busy {
             return;
@@ -498,7 +509,7 @@ impl Shelf {
                 }
                 if work == GameWork::DeleteWithData {
                     if f.data.is_some() {
-                        paths.push(format!("ux0:data/{id}"));
+                        paths.push(format!("ux0:data/{}", if data.is_empty() { &**id } else { data.as_str() }));
                     }
                     if f.repatch.is_some() {
                         paths.push(format!("ux0:rePatch/{id}"));
@@ -515,7 +526,7 @@ impl Shelf {
             return;
         }
         editor.armed = None;
-        if host.game_work(&game.id, work) {
+        if host.game_work(&game.id, work, &data) {
             editor.busy = true;
             editor.note = t.working.to_string();
         } else {
@@ -621,6 +632,7 @@ impl Shelf {
             None => String::new(),
         };
         let folders = self.editor.as_ref().and_then(|e| e.folders).unwrap_or_default();
+        let chosen_data = self.editor.as_ref().and_then(|e| self.data_map.as_ref()?.get(&e.id).cloned()).unwrap_or_default();
         let rows: Vec<(&str, String, Step)> = self
             .editor_row_list()
             .into_iter()
@@ -636,6 +648,7 @@ impl Shelf {
                 Row::Reset => (t.reset, String::new(), Step::None),
                 Row::Folder(folder) => (folder.label(), folder.size(&folders).map(format_size).unwrap_or_default(), Step::None),
                 Row::BackupSaves => (t.backup_saves, String::new(), Step::None),
+                Row::DataFolder => (t.data_folder, fit(gfx, &chosen_data), Step::None),
                 Row::Shrink => (t.shrink, String::new(), Step::None),
                 Row::Delete => (t.delete_game, String::new(), Step::None),
                 Row::DeleteWithData => (t.delete_game_data, String::new(), Step::None),

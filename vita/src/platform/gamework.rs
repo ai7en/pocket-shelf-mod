@@ -49,10 +49,11 @@ pub(super) fn valid_id(id: &str) -> bool {
 }
 
 /// Do the work; the bytes freed (0 for a delete), or what failed.
-pub fn run(id: &str, work: GameWork) -> Result<u64, String> {
+pub fn run(id: &str, work: GameWork, data: &str) -> Result<u64, String> {
     if !valid_id(id) {
         return Err(String::from("title id"));
     }
+    let data = data_folder(id, data)?;
     if id == super::installed::SELF_TITLE_ID {
         return Err(String::from("this app"));
     }
@@ -65,7 +66,7 @@ pub fn run(id: &str, work: GameWork) -> Result<u64, String> {
         GameWork::Delete => uninstall(id).map(|()| 0),
         GameWork::DeleteWithData => {
             uninstall(id)?;
-            for folder in [format!("ux0:data/{id}"), format!("ux0:rePatch/{id}")] {
+            for folder in [format!("ux0:data/{data}"), format!("ux0:rePatch/{id}")] {
                 if fs::metadata(&folder).is_ok() {
                     log_line(&format!("game work {work:?} {id}: removing {folder}"));
                     let removed = fs::remove_dir_all(&folder);
@@ -85,14 +86,38 @@ pub fn run(id: &str, work: GameWork) -> Result<u64, String> {
     result
 }
 
+/// The folder of `ux0:data` a title's files are in: the title id, or the name
+/// the user chose. A name is one path component and never this app's own
+/// data folder.
+fn data_folder(id: &str, chosen: &str) -> Result<String, String> {
+    if chosen.is_empty() {
+        return Ok(id.to_string());
+    }
+    let own = crate::host::DATA.rsplit('/').next().unwrap_or("");
+    if !shelf_core::shelf::datadir::valid_folder(chosen) || chosen.eq_ignore_ascii_case(own) || chosen.eq_ignore_ascii_case("PocketShelf") || chosen.eq_ignore_ascii_case("RetroShelf") {
+        return Err(String::from("data folder"));
+    }
+    Ok(chosen.to_string())
+}
+
+/// The folders of `ux0:data`, by name.
+pub fn data_folders() -> Vec<String> {
+    let mut names: Vec<String> = fs::read_dir("ux0:data")
+        .map(|entries| entries.flatten().filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir())).filter_map(|entry| entry.file_name().into_string().ok()).collect())
+        .unwrap_or_default();
+    names.sort();
+    names
+}
+
 /// The bytes in `ux0:app/<id>`, `ux0:data/<id>` and `ux0:rePatch/<id>`, `None` for a folder
 /// that does not exist. Walks every file: worker thread only.
-pub fn folder_sizes(id: &str) -> shelf_core::host::FolderSizes {
+pub fn folder_sizes(id: &str, data: &str) -> shelf_core::host::FolderSizes {
+    let Ok(data) = data_folder(id, data) else { return Default::default() };
     if !valid_id(id) {
         return Default::default();
     }
     let size = |root: &str| {
-        let folder = format!("{root}/{id}");
+        let folder = if root == "ux0:data" { format!("{root}/{data}") } else { format!("{root}/{id}") };
         fs::metadata(&folder).ok()?;
         let mut found = Vec::new();
         files(&folder, "", &mut found);

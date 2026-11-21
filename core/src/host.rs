@@ -387,6 +387,8 @@ pub enum Event {
     Cores(String, Vec<CoreList>),
     /// [`Host::folder_sizes`] finished for this title.
     Folders(String, FolderSizes),
+    /// [`Host::data_folders`] finished: the folder names.
+    DataFolders(Vec<String>),
     /// [`Host::vpk_scan`] finished.
     Vpks(Vec<VpkInfo>),
     /// [`Host::vpk_install`] finished: the path, and the title id or why not.
@@ -484,6 +486,7 @@ pub const SAVED_FILES: &[&str] = &[
     crate::library::played::PLAYS_FILE,
     crate::library::order::SORT_FILE,
     crate::shelf::restore::LEDGER_FILE,
+    crate::shelf::datadir::DATA_FOLDERS_FILE,
     crate::shelf::catalog::VITADB_CHECK_FILE,
     crate::online::steamgriddb::KEY_FILE,
     crate::updates::RECORD_FILE,
@@ -656,14 +659,20 @@ pub trait Host {
     /// game, on a worker thread (a game's folder holds thousands of
     /// files); answered with [`Event::GameWork`]. False when this host
     /// cannot or is busy.
-    fn game_work(&mut self, _id: &str, _work: GameWork) -> bool {
+    fn game_work(&mut self, _id: &str, _work: GameWork, _data: &str) -> bool {
         false
     }
 
-    /// The size of `ux0:data/<id>` and `ux0:rePatch/<id>` for one installed
+    /// The names of the folders in `ux0:data`, on a worker thread; answered
+    /// with [`Event::DataFolders`]. False when this host cannot.
+    fn data_folders(&mut self) -> bool {
+        false
+    }
+
+    /// The size of `ux0:data/<data>` (`<id>` when `data` is empty) and `ux0:rePatch/<id>` for one installed
     /// game, on a worker thread (a folder holds thousands of files);
     /// answered with [`Event::Folders`]. False when this host cannot.
-    fn folder_sizes(&mut self, _id: &str) -> bool {
+    fn folder_sizes(&mut self, _id: &str, _data: &str) -> bool {
         false
     }
 

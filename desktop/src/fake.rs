@@ -888,7 +888,12 @@ impl Host for FakeHost {
         true
     }
 
-    fn folder_sizes(&mut self, id: &str) -> bool {
+    fn data_folders(&mut self) -> bool {
+        self.later.push(Event::DataFolders(vec!["PocketShelf".into(), "RetroArch".into(), "VitaShell".into(), "VitaDB".into(), "ftpvita".into()]));
+        true
+    }
+
+    fn folder_sizes(&mut self, id: &str, _data: &str) -> bool {
         // What the renders show: a game with both folders.
         let sizes = shelf_core::host::FolderSizes { app: Some(3_435_973_836), data: Some(1_288_490_189), repatch: Some(356_515_840), savedata: Some(18_874_368) };
         self.later.push(Event::Folders(id.to_string(), sizes));
@@ -970,7 +975,7 @@ impl Host for FakeHost {
         true
     }
 
-    fn game_work(&mut self, id: &str, work: shelf_core::host::GameWork) -> bool {
+    fn game_work(&mut self, id: &str, work: shelf_core::host::GameWork, _data: &str) -> bool {
         // What the renders show: a shrink frees
         // 212 MB, a delete works.
         let freed = match work {

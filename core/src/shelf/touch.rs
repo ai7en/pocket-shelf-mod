@@ -41,6 +41,7 @@ impl Shelf {
             || self.vpks.is_some()
             || self.restore.is_some()
             || self.catalog.is_some()
+            || self.datadir.is_some()
             || self.database.is_some()
             || self.diagnostics.is_some()
             || self.picker.is_some()
@@ -262,6 +263,9 @@ impl Shelf {
         if let Some(panel) = &self.catalog {
             return Some((panel.row, self.catalog_row_count().max(1)));
         }
+        if let Some(panel) = &self.datadir {
+            return Some((panel.row, self.datadir_row_count().max(1)));
+        }
         if let Some(panel) = &self.restore {
             return Some((panel.row, self.to_reinstall_count().max(1)));
         }
@@ -324,6 +328,14 @@ impl Shelf {
         }
         if let Some(panel) = &mut self.storage {
             panel.row = (panel.first + row).min(panel.count() - 1);
+            return;
+        }
+        if self.datadir.is_some() {
+            let count = self.datadir_row_count();
+            if let Some(panel) = &mut self.datadir {
+                let first = panel.row.saturating_sub(7 / 2).min(count.saturating_sub(7));
+                panel.row = (first + row).min(count.saturating_sub(1));
+            }
             return;
         }
         if self.catalog.is_some() {

@@ -14,6 +14,7 @@ pub mod navigation;
 pub mod panel;
 mod database;
 pub mod catalog;
+pub mod datadir;
 pub mod restore;
 mod storage;
 mod tools;
@@ -239,6 +240,9 @@ pub struct Shelf {
     vitadb_check: Option<bool>,
     /// The automatic fetch started in this session.
     catalog_asked: bool,
+    /// The folder of `ux0:data` chosen for each title (`datadir.rs`).
+    data_map: Option<std::collections::BTreeMap<String, String>>,
+    datadir: Option<datadir::DataPick>,
     /// Every title this card has had, from `known.tsv`; None until read.
     ledger: Option<Vec<restore::Seen>>,
     /// Title ids of the packages found in `ux0:install` by the last scan.
@@ -352,6 +356,8 @@ impl Shelf {
             updates: 0,
             vitadb_check: None,
             catalog_asked: false,
+            data_map: None,
+            datadir: None,
             ledger: None,
             packaged: Default::default(),
             database: None,
@@ -639,6 +645,8 @@ impl Shelf {
             self.cleanup_input(host, step, pressed & confirm != 0, pressed & cancel != 0);
         } else if self.console_start.is_some() {
             self.console_start_input(host, step, pressed & confirm != 0, pressed & cancel != 0);
+        } else if self.datadir.is_some() {
+            self.datadir_input(host, step, pressed & confirm != 0, pressed & cancel != 0);
         } else if self.catalog.is_some() {
             self.catalog_input(host, step, pressed & confirm != 0, pressed & SQUARE != 0, pressed & cancel != 0);
         } else if self.restore.is_some() {
@@ -1525,6 +1533,9 @@ impl Shelf {
         if self.catalog.is_some() {
             self.draw_catalog(gfx);
         }
+        if self.datadir.is_some() {
+            self.draw_datadir(gfx);
+        }
         if self.database.is_some() {
             self.draw_database(gfx);
         }
@@ -2074,7 +2085,7 @@ mod tests {
         fn rescan_some(&mut self, phases: Vec<crate::host::ScanPhase>) {
             self.rescans.push(Some(phases));
         }
-        fn game_work(&mut self, id: &str, work: crate::host::GameWork) -> bool {
+        fn game_work(&mut self, id: &str, work: crate::host::GameWork, _data: &str) -> bool {
             self.works.push((id.to_string(), work));
             true
         }
@@ -2248,7 +2259,7 @@ mod tests {
         // The shelf's own title has none of the three.
         let own = TitleInfo { id: "RETROSHLF".into(), title: "Retro Shelf".into(), platform: "vita".into(), ..Default::default() };
         let own = load_catalog(&[own]);
-        assert!(!editor::editor_rows(&own[0], false, &Default::default()).contains(&editor::Row::Delete));
+        assert!(!editor::editor_rows(&own[0], false, None).contains(&editor::Row::Delete));
     }
 
     /// The editor shows the size of a game's `data` and `rePatch` folders
@@ -2265,7 +2276,7 @@ mod tests {
         let sizes = crate::host::FolderSizes { data: Some(3 * 1024 * 1024 * 1024 / 2), ..Default::default() };
         shelf.folders_known("PCSA00069", sizes);
         let rows = shelf.editor_row_list();
-        assert_eq!(rows[rows.len() - 4..], [editor::Row::Folder(editor::Folder::Data), editor::Row::Shrink, editor::Row::Delete, editor::Row::DeleteWithData]);
+        assert_eq!(rows[rows.len() - 5..], [editor::Row::Folder(editor::Folder::Data), editor::Row::DataFolder, editor::Row::Shrink, editor::Row::Delete, editor::Row::DeleteWithData]);
         assert!(!rows.contains(&editor::Row::BackupSaves), "no saves found, no backup row");
         let both = crate::host::FolderSizes { app: Some(5), data: Some(2 * 1024 * 1024), repatch: Some(512 * 1024), savedata: Some(3 * 1024 * 1024) };
         shelf.folders_known("PCSA00069", both);
@@ -2318,7 +2329,7 @@ mod tests {
         let sizes = crate::host::FolderSizes { app: Some(1024), savedata: Some(5 * 1024 * 1024), ..Default::default() };
         shelf.folders_known("PCSA00069", sizes);
         let rows = shelf.editor_row_list();
-        assert_eq!(rows[rows.len() - 4..], [editor::Row::BackupSaves, editor::Row::Shrink, editor::Row::Delete, editor::Row::DeleteWithData]);
+        assert_eq!(rows[rows.len() - 5..], [editor::Row::BackupSaves, editor::Row::DataFolder, editor::Row::Shrink, editor::Row::Delete, editor::Row::DeleteWithData]);
         let go_to = |shelf: &mut Shelf, row: editor::Row| {
             let rows = shelf.editor_row_list();
             shelf.editor.as_mut().unwrap().row = rows.iter().position(|r| *r == row).unwrap();

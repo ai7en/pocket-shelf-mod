@@ -204,6 +204,11 @@ impl App {
                         shelf.vpk_installed(host, &path, result);
                     }
                 }
+                Event::DataFolders(list) => {
+                    if let Some(shelf) = &mut self.shelf {
+                        shelf.data_folders_listed(list);
+                    }
+                }
                 Event::Catalog(result) => {
                     if let Some(shelf) = &mut self.shelf {
                         shelf.catalog_arrived(result);

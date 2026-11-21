@@ -616,11 +616,11 @@ impl Host for VitaHost {
         true
     }
 
-    fn folder_sizes(&mut self, id: &str) -> bool {
-        let (id, sender) = (id.to_string(), self.answer_sender.clone());
+    fn folder_sizes(&mut self, id: &str, data: &str) -> bool {
+        let (id, data, sender) = (id.to_string(), data.to_string(), self.answer_sender.clone());
         spawn("shelf-folders", move || {
             let started = now_us();
-            let sizes = crate::platform::gamework::folder_sizes(&id);
+            let sizes = crate::platform::gamework::folder_sizes(&id, &data);
             log_line(&format!("folders {id}: {sizes:?} in {} ms", (now_us() - started) / 1000));
             let _ = sender.send(Event::Folders(id, sizes));
         });
@@ -704,14 +704,20 @@ impl Host for VitaHost {
         })
     }
 
-    fn game_work(&mut self, id: &str, work: shelf_core::host::GameWork) -> bool {
+    fn data_folders(&mut self) -> bool {
+        self.storage_job("data folders", |sender| {
+            let _ = sender.send(Event::DataFolders(crate::platform::gamework::data_folders()));
+        })
+    }
+
+    fn game_work(&mut self, id: &str, work: shelf_core::host::GameWork, data: &str) -> bool {
         if !crate::platform::gamework::begin() {
             return false;
         }
-        let (id, sender) = (id.to_string(), self.answer_sender.clone());
+        let (id, data, sender) = (id.to_string(), data.to_string(), self.answer_sender.clone());
         spawn("shelf-work", move || {
             let started = now_us();
-            let result = crate::platform::gamework::run(&id, work);
+            let result = crate::platform::gamework::run(&id, work, &data);
             log_line(&format!("game work {work:?} {id}: {result:?} in {} ms", (now_us() - started) / 1000));
             crate::platform::gamework::end();
             let _ = sender.send(Event::GameWork(id, work, result));
